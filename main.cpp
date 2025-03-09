@@ -18,7 +18,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <algorithm>
 #include "csv.h"
 #include <iostream>
-#include <magic_enum.hpp>
+#include <magic_enum/magic_enum.hpp>
 
 #include "vk/downloader.h"
 
@@ -235,13 +235,7 @@ int main(int argc, char** argv) {
 
 
         if (exchange == "bnb") {
-            if (marketCategory == MarketCategory::Spot) {
-                spdlog::error(
-                    "Unsupported market category: ({}) for Binance exchange", magic_enum::enum_name(marketCategory));
-                return 0;
-            }
-            downloader = std::make_unique<BinanceDownloader>(maxJobs);
-            downloader->updateMarketData(outputDirectory, symbols, candleInterval, {}, {});
+            downloader = std::make_unique<BinanceDownloader>(maxJobs, marketCategory);
         }
         else if (exchange == "bybit") {
             spdlog::info(

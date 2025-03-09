@@ -20,7 +20,7 @@ class BinanceDownloader final : public IExchangeDownloader {
     std::unique_ptr<P> m_p{};
 
 public:
-    explicit BinanceDownloader(std::uint32_t maxJobs);
+    explicit BinanceDownloader(std::uint32_t maxJobs, MarketCategory marketCategory);
 
     ~BinanceDownloader() override;
 

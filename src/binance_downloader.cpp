@@ -20,7 +20,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <ranges>
 #include <regex>
 #include <future>
-#include <magic_enum.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include "csv.h"
 
 using namespace vk::binance::futures;
@@ -31,6 +31,7 @@ struct BinanceDownloader::P {
     std::unique_ptr<PostgresConnector> m_postgresConnector;
     mutable Semaphore m_maxConcurrentConvertJobs;
     Semaphore m_maxConcurrentDownloadJobs{3};
+    MarketCategory m_marketCategory = MarketCategory::Futures;
 
     explicit P(const std::uint32_t maxJobs) : m_bnbClient(std::make_unique<RESTClient>("", "")),
                                               m_maxConcurrentConvertJobs(maxJobs) {
@@ -55,9 +56,20 @@ struct BinanceDownloader::P {
     static int64_t checkFundingRatesCSVFile(const std::string& path);
 
     static bool writeFundingRatesToCSVFile(const std::vector<FundingRate>& fr, const std::string& path);
+
+    void updateFuturesMarketData(const std::string& dirPath, const std::vector<std::string>& symbols,
+                                                    CandleInterval candleInterval,
+                                                    const onSymbolsToUpdate& onSymbolsToUpdateCB,
+                                                    const onSymbolCompleted& onSymbolCompletedCB);
+
+    void updateSpotMarketData(const std::string& dirPath, const std::vector<std::string>& symbols,
+                                 CandleInterval candleInterval,
+                                 const onSymbolsToUpdate& onSymbolsToUpdateCB,
+                                 const onSymbolCompleted& onSymbolCompletedCB);
 };
 
-BinanceDownloader::BinanceDownloader(std::uint32_t maxJobs) : m_p(std::make_unique<P>(maxJobs)) {
+BinanceDownloader::BinanceDownloader(std::uint32_t maxJobs, MarketCategory marketCategory) : m_p(std::make_unique<P>(maxJobs)) {
+    m_p->m_marketCategory = marketCategory;
 }
 
 BinanceDownloader::~BinanceDownloader() = default;
@@ -383,10 +395,10 @@ bool BinanceDownloader::P::writeFundingRatesToCSVFile(const std::vector<FundingR
     return true;
 }
 
-void BinanceDownloader::updateMarketData(const std::string& dirPath, const std::vector<std::string>& symbols,
+void BinanceDownloader::P::updateFuturesMarketData(const std::string& dirPath, const std::vector<std::string>& symbols,
                                          CandleInterval candleInterval,
                                          const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                                         const onSymbolCompleted& onSymbolCompletedCB) const {
+                                         const onSymbolCompleted& onSymbolCompletedCB) {
     auto bnbCandleInterval = binance::CandleInterval::_1m;
     const auto barSizeInMinutes = static_cast<std::underlying_type_t<CandleInterval>>(candleInterval) / 60;
 
@@ -408,13 +420,13 @@ void BinanceDownloader::updateMarketData(const std::string& dirPath, const std::
         spdlog::info(fmt::format("Updating symbols: {}", fmt::join(symbols, ", ")));
     }
 
-    const auto exchangeInfo = m_p->m_bnbClient->getExchangeInfo();
+    const auto exchangeInfo = m_bnbClient->getExchangeInfo();
 
     for (const auto& limit : exchangeInfo.m_rateLimits) {
         if (limit.m_rateLimitType == RateLimitType::REQUEST_WEIGHT && limit.m_intervalNum == 1 &&
             limit.m_interval == RateLimitInterval::MINUTE) {
             spdlog::info(fmt::format("Weight limit: {}", limit.m_limit));
-            m_p->m_bnbClient->setAPIWeightLimit(limit.m_limit);
+            m_bnbClient->setAPIWeightLimit(limit.m_limit);
         }
     }
 
@@ -469,7 +481,7 @@ void BinanceDownloader::updateMarketData(const std::string& dirPath, const std::
 
                            const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
 
-                           const auto candles = m_p->m_bnbClient->getHistoricalPrices(symbol,
+                           const auto candles = m_bnbClient->getHistoricalPrices(symbol,
                                bnbCandleInterval,
                                fromTimeStamp,
                                nowTimestamp, 1500);
@@ -481,7 +493,7 @@ void BinanceDownloader::updateMarketData(const std::string& dirPath, const std::
                                }
                            }
                            return "";
-                       }, s, std::ref(m_p->m_maxConcurrentDownloadJobs)));
+                       }, s, std::ref(m_maxConcurrentDownloadJobs)));
     }
 
     do {
@@ -499,7 +511,14 @@ void BinanceDownloader::updateMarketData(const std::string& dirPath, const std::
     T6Directory.append(Downloader::minutesToString(barSizeInMinutes));
 
     spdlog::info(fmt::format("Converting from csv to t6..."));
-    m_p->convertFromCSVToT6(csvFilePaths, T6Directory.string());
+    convertFromCSVToT6(csvFilePaths, T6Directory.string());
+}
+
+void BinanceDownloader::P::updateSpotMarketData(const std::string &dirPath, const std::vector<std::string> &symbols,
+                                                CandleInterval candleInterval,
+                                                const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                                                const onSymbolCompleted &onSymbolCompletedCB) {
+
 }
 
 void BinanceDownloader::updateMarketData(const std::string& connectionString,
@@ -684,4 +703,18 @@ void BinanceDownloader::updateFundingRateData(const std::string& dirPath,
     }
     while (csvFilePaths.size() < futures.size());
 }
+
+void BinanceDownloader::updateMarketData(const std::string &dirPath,
+                                         const std::vector<std::string> &symbols,
+                                         CandleInterval candleInterval,
+                                         const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                                         const onSymbolCompleted &onSymbolCompletedCB) const {
+
+    if (m_p->m_marketCategory == MarketCategory::Futures) {
+        m_p->updateFuturesMarketData(dirPath, symbols, candleInterval, onSymbolsToUpdateCB, onSymbolCompletedCB);
+    } else {
+        m_p->updateSpotMarketData(dirPath, symbols, candleInterval, onSymbolsToUpdateCB, onSymbolCompletedCB);
+    }
+}
+
 }
