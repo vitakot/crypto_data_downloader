@@ -7,9 +7,11 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 */
 
 #include <memory>
-#include "vk/binance/binance_downloader.h"
+#include "vk/binance/binance_futures_downloader.h"
 #include "vk/bybit/bybit_downloader.h"
 #include "vk/okx/okx_downloader.h"
+#include "vk/downloader.h"
+#include "vk/binance/binance_spot_downloader.h"
 #include <spdlog/spdlog.h>
 #include <cxxopts.hpp>
 #include <filesystem>
@@ -19,8 +21,6 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include "csv.h"
 #include <iostream>
 #include <magic_enum/magic_enum.hpp>
-
-#include "vk/downloader.h"
 
 #undef max
 
@@ -233,9 +233,11 @@ int main(int argc, char** argv) {
         std::unique_ptr<IExchangeDownloader> downloader;
         const auto candleInterval = Downloader::minutesToCandleInterval(barSizeInMinutes);
 
-
-        if (exchange == "bnb") {
-            downloader = std::make_unique<BinanceDownloader>(maxJobs, marketCategory);
+        if (exchange == "bnb" && marketCategory == MarketCategory::Futures) {
+            downloader = std::make_unique<BinanceFuturesDownloader>(maxJobs);
+        }
+        else if (exchange == "bnb" && marketCategory == MarketCategory::Spot) {
+            downloader = std::make_unique<BinanceSpotDownloader>(maxJobs);
         }
         else if (exchange == "bybit") {
             spdlog::info(
