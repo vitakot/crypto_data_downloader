@@ -27,16 +27,20 @@ include_directories(include vk_cpp_common/include binance_cpp_api/include bybit_
 
 set(HEADERS
         include/vk/downloader.h
-        include/vk/binance/binance_downloader.h
+        include/vk/binance/binance_futures_downloader.h
+        include/vk/binance/binance_spot_downloader.h
+        include/vk/binance/binance_common.h
         include/vk/bybit/bybit_downloader.h
         include/vk/okx/okx_downloader.h
 )
 
 set(SOURCES
-        src/binance_downloader.cpp
+        src/binance_futures_downloader.cpp
+        src/binance_spot_downloader.cpp
         src/bybit_downloader.cpp
         src/postgres_connector.cpp
         src/okx_downloader.cpp
+        src/binance_common.cpp
 )
 
 add_executable(crypto_data_downloader main.cpp ${SOURCES} ${HEADERS})
