@@ -20,7 +20,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <algorithm>
 #include "csv.h"
 #include <iostream>
-#include <magic_enum/magic_enum.hpp>
+#include <magic_enum.hpp>
 
 #undef max
 
