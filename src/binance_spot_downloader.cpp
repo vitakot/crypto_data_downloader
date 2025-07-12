@@ -10,7 +10,6 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include "vk/binance/binance_spot_rest_client.h"
 #include "vk/binance/binance_common.h"
 #include "vk/downloader.h"
-#include "vk/postgres_connector.h"
 #include "vk/utils/semaphore.h"
 #include "vk/utils/utils.h"
 #include "vk/binance/binance.h"
@@ -50,7 +49,7 @@ void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const s
     auto bnbCandleInterval = binance::CandleInterval::_1m;
     const auto barSizeInMinutes = static_cast<std::underlying_type_t<CandleInterval>>(candleInterval) / 60;
 
-    if (const auto isOk = binance::Binance::isValidCandleResolution(barSizeInMinutes, bnbCandleInterval); !isOk) {
+    if (const auto isOk = Binance::isValidCandleResolution(barSizeInMinutes, bnbCandleInterval); !isOk) {
         throw std::invalid_argument("invalid Binance candle resolution: " + std::to_string(barSizeInMinutes) + " m");
     }
 

@@ -13,7 +13,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <ranges>
 #include <regex>
 #include <future>
-#include <magic_enum/magic_enum.hpp>
+#include <magic_enum.hpp>
 #include "csv.h"
 #include "vk/binance/binance_models.h"
 #include "vk/utils/utils.h"
