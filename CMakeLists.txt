@@ -4,7 +4,7 @@ project(crypto_data_downloader)
 set(CMAKE_CXX_STANDARD 20)
 
 if (MSVC)
-    add_definitions(-D_WIN32_WINNT=0x0A00)
+    add_definitions(-D_WIN32_WINNT=0x0A00 /utf-8)
 endif ()
 
 if (POLICY CMP0167)
@@ -12,6 +12,7 @@ if (POLICY CMP0167)
 endif ()
 
 find_package(spdlog CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
 find_package(cxxopts CONFIG REQUIRED)
 find_package(PostgreSQL REQUIRED)
 
@@ -23,7 +24,7 @@ if (NOT TARGET vk_common)
     add_subdirectory(vk_cpp_common)
 endif ()
 
-include_directories(include vk_cpp_common/include binance_cpp_api/include bybit_cpp_api/include okx_cpp_api/include)
+include_directories(include vk_cpp_common/include binance_cpp_api/include bybit_cpp_api/include okx_cpp_api/include magic_enum)
 
 set(HEADERS
         include/vk/downloader.h
@@ -44,4 +45,4 @@ set(SOURCES
 )
 
 add_executable(crypto_data_downloader main.cpp ${SOURCES} ${HEADERS})
-target_link_libraries(crypto_data_downloader PRIVATE spdlog::spdlog_header_only PostgreSQL::PostgreSQL binance_api bybit_api okx_api)
+target_link_libraries(crypto_data_downloader PRIVATE spdlog::spdlog PostgreSQL::PostgreSQL binance_api bybit_api okx_api)

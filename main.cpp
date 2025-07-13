@@ -20,11 +20,16 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <algorithm>
 #include "csv.h"
 #include <iostream>
-#include <magic_enum.hpp>
+
+#ifdef _WIN32
+#include "magic_enum/magic_enum.hpp"
+#else
+#include "magic_enum.hpp"
+#endif
 
 #undef max
 
-#define VERSION "2.0.0"
+#define VERSION "2.1.0"
 
 using namespace vk;
 

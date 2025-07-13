@@ -15,11 +15,10 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include "vk/binance/binance.h"
 #include "vk/interface/exchange_enums.h"
 #include <filesystem>
-#include <fstream>
 #include <spdlog/spdlog.h>
 #include <regex>
 #include <future>
-#include "csv.h"
+#include <fmt/ranges.h>
 
 using namespace vk::binance;
 
