@@ -4,3 +4,7 @@ All notable changes to this project will be documented in this file. This projec
 ## [2.1.0](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.0) (2025-07-24)
 
 - Initial release
+
+## [2.1.1](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.0) (2025-09-28)
+
+- [#1] Fix error while downloading binance spot data
