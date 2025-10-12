@@ -53,7 +53,7 @@ void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const s
     }
 
     std::vector<std::future<std::filesystem::path>> futures;
-    std::filesystem::path finalPath(dirPath);
+    const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
 
@@ -87,7 +87,7 @@ void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const s
     for (const auto& s : symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [&finalPath, this, &bnbCandleInterval, &barSizeInMinutes](const std::string& symbol,
+                       [finalPath, this, &bnbCandleInterval, &barSizeInMinutes](const std::string& symbol,
                        Semaphore& maxJobs) ->
                        std::filesystem::path {
                            std::scoped_lock w(maxJobs);

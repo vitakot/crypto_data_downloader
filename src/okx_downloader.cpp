@@ -334,7 +334,7 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
     }
 
     std::vector<std::future<std::filesystem::path>> futures;
-    std::filesystem::path finalPath(dirPath);
+    const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
 
@@ -360,7 +360,7 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
     for (const auto& s : symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [&finalPath, this, &okxBarSize, &barSizeInMinutes](const std::string& symbol,
+                       [finalPath, this, &okxBarSize, &barSizeInMinutes](const std::string& symbol,
                                                                           Semaphore& maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
                            std::filesystem::path symbolFilePathCsv = finalPath;
@@ -441,7 +441,7 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
                                  const onSymbolsToUpdate& onSymbolsToUpdateCB,
                                  const onSymbolCompleted& onSymbolCompletedCB) const {
     std::vector<std::future<std::filesystem::path>> futures;
-    std::filesystem::path finalPath(dirPath);
+    const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
 
@@ -467,7 +467,7 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
     for (const auto& s : symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [&finalPath, this](const std::string& symbol,
+                       [finalPath, this](const std::string& symbol,
                                           Semaphore& maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
                            std::filesystem::path symbolFilePathCsv = finalPath;
