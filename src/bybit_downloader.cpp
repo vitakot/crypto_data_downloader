@@ -351,7 +351,7 @@ void BybitDownloader::updateMarketData(const std::string& dirPath,
     }
 
     std::vector<std::future<std::filesystem::path>> futures;
-    std::filesystem::path finalPath(dirPath);
+    const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
 
@@ -377,7 +377,7 @@ void BybitDownloader::updateMarketData(const std::string& dirPath,
     for (const auto& s : symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [&finalPath, this, &bybitCandleInterval, &barSizeInMinutes, &category, &csvDirName, &t6DirName](
+                       [finalPath, this, &bybitCandleInterval, &barSizeInMinutes, &category, &csvDirName, &t6DirName](
                        const std::string& symbol,
                        Semaphore& maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
@@ -471,7 +471,7 @@ void BybitDownloader::updateFundingRateData(const std::string& dirPath,
                                             const onSymbolsToUpdate& onSymbolsToUpdateCB,
                                             const onSymbolCompleted& onSymbolCompletedCB) const {
     std::vector<std::future<std::filesystem::path>> futures;
-    std::filesystem::path finalPath(dirPath);
+    const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
 
@@ -499,7 +499,7 @@ void BybitDownloader::updateFundingRateData(const std::string& dirPath,
     for (const auto& s : symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [&finalPath, this](const std::string& symbol,
+                       [finalPath, this](const std::string& symbol,
                                           Semaphore& maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
                            std::filesystem::path symbolFilePathCsv = finalPath;
