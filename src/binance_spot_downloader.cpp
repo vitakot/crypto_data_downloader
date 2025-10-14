@@ -124,18 +124,24 @@ void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const s
 
                            const int64_t fromTimeStamp = BinanceCommon::checkSymbolCSVFile(symbolFilePathCsv.string());
 
-                           const auto candles = m_p->m_bnbSpotClient->getHistoricalPrices(symbol,
-                               bnbCandleInterval,
-                               fromTimeStamp,
-                               nowTimestamp, 1500);
+                           try {
+                               const auto candles = m_p->m_bnbSpotClient->getHistoricalPrices(symbol,
+                                   bnbCandleInterval,
+                                   fromTimeStamp,
+                                   nowTimestamp, 1500);
 
-                           if (!candles.empty()) {
-                               if (BinanceCommon::writeCandlesToCSVFile(candles, symbolFilePathCsv.string())) {
-                                   spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
-                                   return symbolFilePathCsv;
+                               if (!candles.empty()) {
+                                   if (BinanceCommon::writeCandlesToCSVFile(candles, symbolFilePathCsv.string())) {
+                                       spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
+                                       return symbolFilePathCsv;
+                                   }
                                }
                            }
-                           return "";
+                           catch (const std::exception& e) {
+                            spdlog::warn(fmt::format("Updating candles for symbol: {} failed, reason: {}",
+                                                     symbol, e.what()));
+                        }
+                     return "";
                        }, s, std::ref(m_p->m_maxConcurrentDownloadJobs)));
     }
 

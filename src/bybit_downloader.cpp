@@ -423,18 +423,23 @@ void BybitDownloader::updateMarketData(const std::string& dirPath,
                                return "";
                            }
 
-                           /// Add 1000 ms to fromTimeStamp so that we start with the next candle (1ms - 999ms does not work)
-                           const auto candles = m_p->m_bybitClient->getHistoricalPrices(category,
-                               symbol,
-                               bybitCandleInterval,
-                               fromTimeStamp + 1000,
-                               nowTimestamp, 200);
+                           try {
+                               /// Add 1000 ms to fromTimeStamp so that we start with the next candle (1ms - 999ms does not work)
+                               const auto candles = m_p->m_bybitClient->getHistoricalPrices(category,
+                                   symbol,
+                                   bybitCandleInterval,
+                                   fromTimeStamp + 1000,
+                                   nowTimestamp, 200);
 
-                           if (!candles.empty()) {
-                               if (P::writeCandlesToCSVFile(candles, symbolFilePathCsv.string())) {
-                                   spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
-                                   return symbolFilePathCsv;
+                               if (!candles.empty()) {
+                                   if (P::writeCandlesToCSVFile(candles, symbolFilePathCsv.string())) {
+                                       spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
+                                       return symbolFilePathCsv;
+                                   }
                                }
+                           } catch (const std::exception &e) {
+                               spdlog::warn(fmt::format("Updating candles for symbol: {} failed, reason: {}",
+                                                        symbol, e.what()));
                            }
                            return "";
                        }, s, std::ref(m_p->m_maxConcurrentDownloadJobs)));
@@ -520,19 +525,24 @@ void BybitDownloader::updateFundingRateData(const std::string& dirPath,
 
                            const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
 
-                           if (const auto fr = m_p->m_bybitClient->getFundingRates(
-                               Category::linear, symbol, fromTimeStamp + 1000, nowTimestamp); !fr.empty()) {
-                               if (fr.size() == 1) {
-                                   if (fromTimeStamp == fr.front().m_fundingRateTimestamp) {
+                           try {
+                               if (const auto fr = m_p->m_bybitClient->getFundingRates(
+                                   Category::linear, symbol, fromTimeStamp + 1000, nowTimestamp); !fr.empty()) {
+                                   if (fr.size() == 1) {
+                                       if (fromTimeStamp == fr.front().m_fundingRateTimestamp) {
+                                           spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
+                                           return symbolFilePathCsv;
+                                       }
+                                   }
+
+                                   if (P::writeFundingRatesToCSVFile(fr, symbolFilePathCsv.string())) {
                                        spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
                                        return symbolFilePathCsv;
                                    }
                                }
-
-                               if (P::writeFundingRatesToCSVFile(fr, symbolFilePathCsv.string())) {
-                                   spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
-                                   return symbolFilePathCsv;
-                               }
+                           } catch (const std::exception &e) {
+                               spdlog::warn(fmt::format("Updating symbol: {} failed, reason: {}",
+                                                        symbol, e.what()));
                            }
                            return "";
                        }, s, std::ref(m_p->m_maxConcurrentDownloadJobs)));
