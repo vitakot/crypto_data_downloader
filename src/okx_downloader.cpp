@@ -397,16 +397,21 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
 
                            const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
 
-                           const auto candles = m_p->m_okxClient->getHistoricalPrices(symbol,
-                               okxBarSize,
-                               fromTimeStamp,
-                               nowTimestamp);
+                           try {
+                               const auto candles = m_p->m_okxClient->getHistoricalPrices(symbol,
+                                   okxBarSize,
+                                   fromTimeStamp,
+                                   nowTimestamp);
 
-                           if (!candles.empty()) {
-                               if (P::writeCandlesToCSVFile(candles, symbolFilePathCsv.string())) {
-                                   spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
-                                   return symbolFilePathCsv;
+                               if (!candles.empty()) {
+                                   if (P::writeCandlesToCSVFile(candles, symbolFilePathCsv.string())) {
+                                       spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
+                                       return symbolFilePathCsv;
+                                   }
                                }
+                           } catch (const std::exception &e) {
+                               spdlog::warn(fmt::format("Updating candles for symbol: {} failed, reason: {}",
+                                                        symbol, e.what()));
                            }
                            return "";
                        }, s, std::ref(m_p->m_maxConcurrentDownloadJobs)));
@@ -490,18 +495,23 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
                            const auto fr = m_p->m_okxClient->getFundingRates(symbol, fromTimeStamp, nowTimestamp,
                                                                              1000);
 
-                           if (!fr.empty()) {
-                               if (fr.size() == 1) {
-                                   if (fromTimeStamp == fr.front().m_fundingTime) {
+                           try {
+                               if (!fr.empty()) {
+                                   if (fr.size() == 1) {
+                                       if (fromTimeStamp == fr.front().m_fundingTime) {
+                                           spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
+                                           return symbolFilePathCsv;
+                                       }
+                                   }
+
+                                   if (P::writeFundingRatesToCSVFile(fr, symbolFilePathCsv.string())) {
                                        spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
                                        return symbolFilePathCsv;
                                    }
                                }
-
-                               if (P::writeFundingRatesToCSVFile(fr, symbolFilePathCsv.string())) {
-                                   spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
-                                   return symbolFilePathCsv;
-                               }
+                           } catch (const std::exception &e) {
+                               spdlog::warn(fmt::format("Updating symbol: {} failed, reason: {}",
+                                                        symbol, e.what()));
                            }
                            return "";
                        }, s, std::ref(m_p->m_maxConcurrentDownloadJobs)));
