@@ -212,6 +212,7 @@ void BinanceFuturesDownloader::updateMarketData(const std::string& dirPath, cons
     const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
+    std::vector<std::string> symbolsToDelete;
 
     spdlog::info(fmt::format("Symbols directory: {}", finalPath.string()));
 
@@ -241,6 +242,23 @@ void BinanceFuturesDownloader::updateMarketData(const std::string& dirPath, cons
                 symbolsToUpdate.push_back(el.m_symbol);
             }
         }
+    } else {
+        std::vector<std::string> tempSymbols;
+
+        for (const auto &symbol : symbolsToUpdate) {
+            auto it = std::ranges::find_if(exchangeInfo.m_symbols,[symbol](const futures::Symbol &s) {
+                return s.m_symbol == symbol;
+            });
+
+            if (it == exchangeInfo.m_symbols.end()) {
+                symbolsToDelete.push_back(symbol);
+                spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted, data files will be removed...", symbol));
+            } else {
+                tempSymbols.push_back(it->m_symbol);
+            }
+        }
+
+        symbolsToUpdate = tempSymbols;
     }
 
     for (const auto& s : symbolsToUpdate) {
@@ -323,6 +341,34 @@ void BinanceFuturesDownloader::updateMarketData(const std::string& dirPath, cons
 
     spdlog::info(fmt::format("Converting from csv to t6..."));
     m_p->m_binanceCommon->convertFromCSVToT6(csvFilePaths, T6Directory.string());
+
+
+    for (const auto& symbol : symbolsToDelete) {
+        std::filesystem::path symbolFilePathCsv = finalPath;
+        std::filesystem::path symbolFilePathT6 = finalPath;
+
+        symbolFilePathCsv.append(CSV_FUT_DIR);
+        symbolFilePathT6.append(T6_FUT_DIR);
+
+        symbolFilePathCsv.append(Downloader::minutesToString(barSizeInMinutes));
+        symbolFilePathT6.append(Downloader::minutesToString(barSizeInMinutes));
+
+        symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
+        symbolFilePathT6 = symbolFilePathT6.lexically_normal();
+
+        symbolFilePathCsv.append(symbol + ".csv");
+        symbolFilePathT6.append(symbol + ".t6");
+
+        if (std::filesystem::exists(symbolFilePathCsv)) {
+            std::filesystem::remove(symbolFilePathCsv);
+            spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol, symbolFilePathCsv.string());
+        }
+
+        if (std::filesystem::exists(symbolFilePathT6)) {
+            std::filesystem::remove(symbolFilePathT6);
+            spdlog::info("Removing t6 file for delisted symbol: {}, file: {}...", symbol, symbolFilePathT6.string());
+        }
+    }
 }
 
 void BinanceFuturesDownloader::updateMarketData(const std::string& connectionString,
