@@ -339,9 +339,10 @@ void BinanceFuturesDownloader::updateMarketData(const std::string& dirPath, cons
     T6Directory.append(T6_FUT_DIR);
     T6Directory.append(Downloader::minutesToString(barSizeInMinutes));
 
-    spdlog::info(fmt::format("Converting from csv to t6..."));
-    m_p->m_binanceCommon->convertFromCSVToT6(csvFilePaths, T6Directory.string());
-
+    if (!csvFilePaths.empty()) {
+        spdlog::info(fmt::format("Converting from csv to t6..."));
+        m_p->m_binanceCommon->convertFromCSVToT6(csvFilePaths, T6Directory.string());
+    }
 
     for (const auto& symbol : symbolsToDelete) {
         std::filesystem::path symbolFilePathCsv = finalPath;
@@ -470,6 +471,7 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string& dirPath,
     const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
+    std::vector<std::string> symbolsToDelete;
 
     spdlog::info(fmt::format("Symbols directory: {}", finalPath.string()));
 
@@ -499,6 +501,24 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string& dirPath,
                 symbolsToUpdate.push_back(el.m_symbol);
             }
         }
+    } else {
+        std::vector<std::string> tempSymbols;
+
+        for (const auto &symbol: symbolsToUpdate) {
+            auto it = std::ranges::find_if(exchangeInfo.m_symbols, [symbol](const futures::Symbol &s) {
+                return s.m_symbol == symbol;
+            });
+
+            if (it == exchangeInfo.m_symbols.end()) {
+                symbolsToDelete.push_back(symbol);
+                spdlog::info(fmt::format(
+                    "Symbol: {} not found on Exchange, probably delisted, data files will be removed...", symbol));
+            } else {
+                tempSymbols.push_back(it->m_symbol);
+            }
+        }
+
+        symbolsToUpdate = tempSymbols;
     }
 
     for (const auto& s : symbolsToUpdate) {
@@ -516,7 +536,7 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string& dirPath,
                                throw std::runtime_error(fmt::format("Failed to create directory: {}, error: {}", symbolFilePathCsv.string(), err.value()));
                            }
 
-                           symbolFilePathCsv.append(symbol + ".csv");
+                           symbolFilePathCsv.append(symbol + "_fr.csv");
 
                            const auto nowTimestamp = std::chrono::seconds(std::time(nullptr)).count() * 1000;
 
@@ -557,6 +577,18 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string& dirPath,
         }
     }
     while (csvFilePaths.size() < futures.size());
+
+    for (const auto& symbol : symbolsToDelete) {
+        std::filesystem::path symbolFilePathCsv = finalPath;
+        symbolFilePathCsv.append(CSV_FUT_DIR);
+        symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
+        symbolFilePathCsv.append(symbol + "_fr.csv");
+
+        if (std::filesystem::exists(symbolFilePathCsv)) {
+            std::filesystem::remove(symbolFilePathCsv);
+            spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol, symbolFilePathCsv.string());
+        }
+    }
 }
 
 }

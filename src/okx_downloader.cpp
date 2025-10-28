@@ -337,6 +337,7 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
     const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
+    std::vector<std::string> symbolsToDelete;
 
     spdlog::info(fmt::format("Symbols directory: {}", finalPath.string()));
 
@@ -355,6 +356,23 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
                 symbolsToUpdate.push_back(el.m_instId);
             }
         }
+    }else {
+        std::vector<std::string> tempSymbols;
+
+        for (const auto &symbol : symbolsToUpdate) {
+            auto it = std::ranges::find_if(exchangeInstruments,[symbol](const okx::Instrument &i) {
+                return i.m_instId == symbol;
+            });
+
+            if (it == exchangeInstruments.end()) {
+                symbolsToDelete.push_back(symbol);
+                spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted, data files will be removed...", symbol));
+            } else {
+                tempSymbols.push_back(it->m_instId);
+            }
+        }
+
+        symbolsToUpdate = tempSymbols;
     }
 
     for (const auto& s : symbolsToUpdate) {
@@ -431,8 +449,37 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
     T6Directory.append(T6_FUT_DIR);
     T6Directory.append(Downloader::minutesToString(barSizeInMinutes));
 
-    spdlog::info(fmt::format("Converting from csv to t6..."));
-    m_p->convertFromCSVToT6(csvFilePaths, T6Directory.string());
+    if (!csvFilePaths.empty()) {
+        spdlog::info(fmt::format("Converting from csv to t6..."));
+        m_p->convertFromCSVToT6(csvFilePaths, T6Directory.string());
+    }
+
+    for (const auto& symbol : symbolsToDelete) {
+        std::filesystem::path symbolFilePathCsv = finalPath;
+        std::filesystem::path symbolFilePathT6 = finalPath;
+
+        symbolFilePathCsv.append(CSV_FUT_DIR);
+        symbolFilePathT6.append(T6_FUT_DIR);
+
+        symbolFilePathCsv.append(Downloader::minutesToString(barSizeInMinutes));
+        symbolFilePathT6.append(Downloader::minutesToString(barSizeInMinutes));
+
+        symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
+        symbolFilePathT6 = symbolFilePathT6.lexically_normal();
+
+        symbolFilePathCsv.append(symbol + ".csv");
+        symbolFilePathT6.append(symbol + ".t6");
+
+        if (std::filesystem::exists(symbolFilePathCsv)) {
+            std::filesystem::remove(symbolFilePathCsv);
+            spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol, symbolFilePathCsv.string());
+        }
+
+        if (std::filesystem::exists(symbolFilePathT6)) {
+            std::filesystem::remove(symbolFilePathT6);
+            spdlog::info("Removing t6 file for delisted symbol: {}, file: {}...", symbol, symbolFilePathT6.string());
+        }
+    }
 }
 
 void OKXDownloader::updateMarketData(const std::string& connectionString,
@@ -449,6 +496,7 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
     const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
+    std::vector<std::string> symbolsToDelete;
 
     spdlog::info(fmt::format("Symbols directory: {}", finalPath.string()));
 
@@ -467,6 +515,24 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
                 symbolsToUpdate.push_back(el.m_instId);
             }
         }
+    } else {
+        std::vector<std::string> tempSymbols;
+
+        for (const auto &symbol: symbolsToUpdate) {
+            auto it = std::ranges::find_if(exchangeInstruments, [symbol](const okx::Instrument &i) {
+                return i.m_instId == symbol;
+            });
+
+            if (it == exchangeInstruments.end()) {
+                symbolsToDelete.push_back(symbol);
+                spdlog::info(fmt::format(
+                    "Symbol: {} not found on Exchange, probably delisted, data files will be removed...", symbol));
+            } else {
+                tempSymbols.push_back(it->m_instId);
+            }
+        }
+
+        symbolsToUpdate = tempSymbols;
     }
 
     for (const auto& s : symbolsToUpdate) {
@@ -484,7 +550,7 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
                                                                     symbolFilePathCsv.string(), err.value()));
                            }
 
-                           symbolFilePathCsv.append(symbol + ".csv");
+                           symbolFilePathCsv.append(symbol + "_fr.csv");
 
                            const auto nowTimestamp = std::chrono::seconds(std::time(nullptr)).count() * 1000;
 
@@ -525,5 +591,17 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
         }
     }
     while (csvFilePaths.size() < futures.size());
+
+    for (const auto& symbol : symbolsToDelete) {
+        std::filesystem::path symbolFilePathCsv = finalPath;
+        symbolFilePathCsv.append(CSV_FUT_DIR);
+        symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
+        symbolFilePathCsv.append(symbol + "_fr.csv");
+
+        if (std::filesystem::exists(symbolFilePathCsv)) {
+            std::filesystem::remove(symbolFilePathCsv);
+            spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol, symbolFilePathCsv.string());
+        }
+    }
 }
 }
