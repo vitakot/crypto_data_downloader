@@ -12,7 +12,6 @@ if (POLICY CMP0167)
 endif ()
 
 find_package(spdlog CONFIG REQUIRED)
-find_package(fmt CONFIG REQUIRED)
 find_package(cxxopts CONFIG REQUIRED)
 find_package(PostgreSQL REQUIRED)
 
