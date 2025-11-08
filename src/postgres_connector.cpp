@@ -9,7 +9,6 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include "vk/postgres_connector.h"
 #include "vk/utils/utils.h"
 #include <mutex>
-#include <fmt/format.h>
 #include "libpq-fe.h"
 
 namespace vk {
