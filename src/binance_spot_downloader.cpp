@@ -18,6 +18,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <spdlog/spdlog.h>
 #include <regex>
 #include <future>
+#include <spdlog/fmt/ranges.h>
 
 using namespace vk::binance;
 
