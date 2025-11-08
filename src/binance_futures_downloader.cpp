@@ -20,7 +20,6 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <spdlog/spdlog.h>
 #include <regex>
 #include <future>
-#include <fmt/ranges.h>
 
 #ifdef _WIN32
 #include "magic_enum/magic_enum.hpp"

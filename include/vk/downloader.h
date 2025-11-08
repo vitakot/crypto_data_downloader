@@ -9,7 +9,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #ifndef INCLUDE_VK_DEFINITIONS_H
 #define INCLUDE_VK_DEFINITIONS_H
 #include <thread>
-#include <fmt/format.h>
+#include <spdlog/fmt/ostr.h>
 
 namespace vk {
 static auto CSV_FUT_DIR = "csvFut";
