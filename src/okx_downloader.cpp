@@ -16,7 +16,6 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <filesystem>
 #include <fstream>
 #include <spdlog/spdlog.h>
-#include <fmt/ranges.h>
 
 using namespace vk::okx::futures;
 

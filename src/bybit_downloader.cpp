@@ -19,7 +19,6 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <ranges>
 #include <regex>
 #include <future>
-#include <fmt/ranges.h>
 
 using namespace vk::bybit;
 
