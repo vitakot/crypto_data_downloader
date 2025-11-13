@@ -353,7 +353,11 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
     if (symbolsToUpdate.empty()) {
         for (const auto& el : exchangeInstruments) {
             if (el.m_settleCcy == "USDT") {
-                symbolsToUpdate.push_back(el.m_instId);
+                if (el.m_state == okx::InstrumentStatus::live) {
+                    symbolsToUpdate.push_back(el.m_instId);
+                } else {
+                    symbolsToDelete.push_back(el.m_instId);
+                }
             }
         }
     }else {
@@ -364,7 +368,7 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
                 return i.m_instId == symbol;
             });
 
-            if (it == exchangeInstruments.end()) {
+            if (it == exchangeInstruments.end() || it->m_state != okx::InstrumentStatus::live) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted, data files will be removed...", symbol));
             } else {
@@ -512,7 +516,11 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
     if (symbolsToUpdate.empty()) {
         for (const auto& el : exchangeInstruments) {
             if (el.m_settleCcy == "USDT") {
-                symbolsToUpdate.push_back(el.m_instId);
+                if (el.m_state == okx::InstrumentStatus::live) {
+                    symbolsToUpdate.push_back(el.m_instId);
+                } else {
+                    symbolsToDelete.push_back(el.m_instId);
+                }
             }
         }
     } else {
@@ -523,7 +531,7 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
                 return i.m_instId == symbol;
             });
 
-            if (it == exchangeInstruments.end()) {
+            if (it == exchangeInstruments.end() || it->m_state != okx::InstrumentStatus::live) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format(
                     "Symbol: {} not found on Exchange, probably delisted, data files will be removed...", symbol));

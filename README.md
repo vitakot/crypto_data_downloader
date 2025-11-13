@@ -20,7 +20,6 @@ Once you are done, add a vcpkg.exe to your PATH and you can start installing the
 - vcpkg install cxxopts:x64-windows
 - vcpkg install libpqxx:x64-windows
 - vcpkg install spdlog:x64-windows
-- vcpkg install fmt:x64-windows
 - vcpkg install openssl:x64-windows
 - vcpkg install boost:x64-windows
 - vcpkg install nlohmann-json:x64-windows

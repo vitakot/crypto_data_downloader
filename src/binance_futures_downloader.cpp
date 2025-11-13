@@ -239,7 +239,12 @@ void BinanceFuturesDownloader::updateMarketData(const std::string& dirPath, cons
 
         for (const auto& el : exchangeInfo.m_symbols) {
             if (el.m_contractType == symbolType && el.m_quoteAsset == "USDT") {
-                symbolsToUpdate.push_back(el.m_symbol);
+                if (el.m_status == ContractStatus::TRADING) {
+                    symbolsToUpdate.push_back(el.m_symbol);
+                }
+                else {
+                    symbolsToDelete.push_back(el.m_symbol);
+                }
             }
         }
     } else {
@@ -250,7 +255,7 @@ void BinanceFuturesDownloader::updateMarketData(const std::string& dirPath, cons
                 return s.m_symbol == symbol;
             });
 
-            if (it == exchangeInfo.m_symbols.end()) {
+            if (it == exchangeInfo.m_symbols.end() || it->m_status != ContractStatus::TRADING) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted, data files will be removed...", symbol));
             } else {
@@ -498,7 +503,11 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string& dirPath,
 
         for (const auto& el : exchangeInfo.m_symbols) {
             if (el.m_contractType == symbolType && el.m_quoteAsset == "USDT") {
-                symbolsToUpdate.push_back(el.m_symbol);
+                if (el.m_status == ContractStatus::TRADING) {
+                    symbolsToUpdate.push_back(el.m_symbol);
+                } else {
+                    symbolsToDelete.push_back(el.m_symbol);
+                }
             }
         }
     } else {
@@ -509,7 +518,7 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string& dirPath,
                 return s.m_symbol == symbol;
             });
 
-            if (it == exchangeInfo.m_symbols.end()) {
+            if (it == exchangeInfo.m_symbols.end() || it->m_status != ContractStatus::TRADING) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format(
                     "Symbol: {} not found on Exchange, probably delisted, data files will be removed...", symbol));

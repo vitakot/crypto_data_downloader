@@ -77,7 +77,7 @@ bool BybitDownloader::P::readCandlesFromCSVFile(const std::string& path, std::ve
 }
 
 bool BybitDownloader::P::writeCSVCandlesToZorroT6File(const std::string& csvPath, const std::string& t6Path) {
-    std::filesystem::path pathToT6File{t6Path};
+    const std::filesystem::path pathToT6File{t6Path};
 
     std::ofstream ofs;
     ofs.open(pathToT6File.string(), std::ios::trunc | std::ios::binary);
@@ -193,7 +193,7 @@ bool BybitDownloader::P::writeCandlesToCSVFile(const std::vector<Candle>& candle
 }
 
 int64_t BybitDownloader::P::checkSymbolCSVFile(const std::string& path) {
-    int64_t oldestBybitDate = 1420070400000; /// Thursday 1. January 2015 0:00:00
+    constexpr int64_t oldestBybitDate = 1420070400000; /// Thursday 1. January 2015 0:00:00
 
     std::ifstream ifs;
     ifs.open(path, std::ios::ate);
@@ -206,7 +206,7 @@ int64_t BybitDownloader::P::checkSymbolCSVFile(const std::string& path) {
     }
 
     /// Read last row
-    std::streampos size = ifs.tellg();
+    const std::streampos size = ifs.tellg();
     char c;
     std::string row;
     int endLines = 0;
@@ -220,7 +220,7 @@ int64_t BybitDownloader::P::checkSymbolCSVFile(const std::string& path) {
             if (endLines >= 1 && !row.empty()) {
                 std::ranges::reverse(row);
 
-                auto records = splitString(row, ',');
+                const auto records = splitString(row, ',');
 
                 if (records.size() != 6) {
                     spdlog::error(fmt::format("Wrong records number in the CSV file: {}", path));
@@ -240,7 +240,7 @@ int64_t BybitDownloader::P::checkSymbolCSVFile(const std::string& path) {
 }
 
 int64_t BybitDownloader::P::checkFundingRatesCSVFile(const std::string& path) {
-    int64_t oldestBybitDate = 1420070400000; /// Thursday 1. January 2015 0:00:00
+    constexpr int64_t oldestBybitDate = 1420070400000; /// Thursday 1. January 2015 0:00:00
 
     std::ifstream ifs;
     ifs.open(path, std::ios::ate);
@@ -253,7 +253,7 @@ int64_t BybitDownloader::P::checkFundingRatesCSVFile(const std::string& path) {
     }
 
     /// Read last row
-    std::streampos size = ifs.tellg();
+    const std::streampos size = ifs.tellg();
     char c;
     std::string row;
     int endLines = 0;
@@ -370,7 +370,12 @@ void BybitDownloader::updateMarketData(const std::string& dirPath,
     if (symbolsToUpdate.empty()) {
         for (const auto& el : exchangeSymbols) {
             if (el.m_quoteCoin == "USDT") {
-                symbolsToUpdate.push_back(el.m_symbol);
+                if (el.m_contractStatus == ContractStatus::Trading) {
+                    symbolsToUpdate.push_back(el.m_symbol);
+                }
+                else {
+                    symbolsToDelete.push_back(el.m_symbol);
+                }
             }
         }
     } else {
@@ -381,7 +386,7 @@ void BybitDownloader::updateMarketData(const std::string& dirPath,
                 return i.m_symbol == symbol;
             });
 
-            if (it == exchangeSymbols.end()) {
+            if (it == exchangeSymbols.end() || it->m_contractStatus != ContractStatus::Trading) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format(
                     "Symbol: {} not found on Exchange, probably delisted, data files will be removed...", symbol));
@@ -543,7 +548,11 @@ void BybitDownloader::updateFundingRateData(const std::string& dirPath,
 
         for (const auto& el : instrumentsInfo) {
             if (el.m_contractType == symbolContract && el.m_quoteCoin == "USDT") {
-                symbolsToUpdate.push_back(el.m_symbol);
+                if (el.m_contractStatus == ContractStatus::Trading) {
+                    symbolsToUpdate.push_back(el.m_symbol);
+                } else {
+                    symbolsToDelete.push_back(el.m_symbol);
+                }
             }
         }
     } else {
@@ -554,7 +563,7 @@ void BybitDownloader::updateFundingRateData(const std::string& dirPath,
                 return i.m_symbol == symbol;
             });
 
-            if (it == instrumentsInfo.end()) {
+            if (it == instrumentsInfo.end() || it->m_contractStatus != ContractStatus::Trading) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format(
                     "Symbol: {} not found on Exchange, probably delisted, data files will be removed...", symbol));
