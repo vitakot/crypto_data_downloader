@@ -16,3 +16,6 @@ All notable changes to this project will be documented in this file. This projec
 
 ## [2.1.3](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.0) (2025-11-13)
 - Improve automatic deletion of delisted symbols data
+
+## [2.1.4](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.0) (2025-11-16)
+- Add pagination to bybit getInstrumentsInfo, it downloaded data for max 500 symbols without it
