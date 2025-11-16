@@ -44,4 +44,4 @@ set(SOURCES
 )
 
 add_executable(crypto_data_downloader main.cpp ${SOURCES} ${HEADERS})
-target_link_libraries(crypto_data_downloader PRIVATE spdlog::spdlog PostgreSQL::PostgreSQL binance_api bybit_api okx_api)
+target_link_libraries(crypto_data_downloader PRIVATE spdlog::spdlog_header_only PostgreSQL::PostgreSQL binance_api bybit_api okx_api)
