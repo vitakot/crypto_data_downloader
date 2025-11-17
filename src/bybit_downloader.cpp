@@ -28,22 +28,22 @@ struct BybitDownloader::P {
     std::unique_ptr<RESTClient> m_bybitClient;
     mutable Semaphore maxConcurrentConvertJobs;
     mutable std::recursive_mutex m_locker;
-    Semaphore m_maxConcurrentDownloadJobs{3};
+    Semaphore m_maxConcurrentDownloadJobs{2};
     MarketCategory m_marketCategory = MarketCategory::Futures;
 
-    static bool writeCSVCandlesToZorroT6File(const std::string& csvPath, const std::string& t6Path);
+    static bool writeCSVCandlesToZorroT6File(const std::string &csvPath, const std::string &t6Path);
 
-    static int64_t checkSymbolCSVFile(const std::string& path);
+    static int64_t checkSymbolCSVFile(const std::string &path);
 
-    static bool writeCandlesToCSVFile(const std::vector<Candle>& candles, const std::string& path);
+    static bool writeCandlesToCSVFile(const std::vector<Candle> &candles, const std::string &path);
 
-    static bool readCandlesFromCSVFile(const std::string& path, std::vector<Candle>& candles);
+    static bool readCandlesFromCSVFile(const std::string &path, std::vector<Candle> &candles);
 
-    void convertFromCSVToT6(const std::vector<std::filesystem::path>& filePaths, const std::string& outDirPath) const;
+    void convertFromCSVToT6(const std::vector<std::filesystem::path> &filePaths, const std::string &outDirPath) const;
 
-    static int64_t checkFundingRatesCSVFile(const std::string& path);
+    static int64_t checkFundingRatesCSVFile(const std::string &path);
 
-    static bool writeFundingRatesToCSVFile(const std::vector<FundingRate>& fr, const std::string& path);
+    static bool writeFundingRatesToCSVFile(const std::vector<FundingRate> &fr, const std::string &path);
 
     explicit P(const std::uint32_t maxJobs) : m_bybitClient(std::make_unique<RESTClient>("", "")),
                                               maxConcurrentConvertJobs(maxJobs) {
@@ -57,7 +57,7 @@ BybitDownloader::BybitDownloader(std::uint32_t maxJobs, const MarketCategory mar
 
 BybitDownloader::~BybitDownloader() = default;
 
-bool BybitDownloader::P::readCandlesFromCSVFile(const std::string& path, std::vector<Candle>& candles) {
+bool BybitDownloader::P::readCandlesFromCSVFile(const std::string &path, std::vector<Candle> &candles) {
     try {
         io::CSVReader<6> in(path);
         in.read_header(io::ignore_extra_column, "open_time", "open", "high", "low", "close", "volume");
@@ -67,8 +67,7 @@ bool BybitDownloader::P::readCandlesFromCSVFile(const std::string& path, std::ve
                            candle.m_volume)) {
             candles.push_back(candle);
         }
-    }
-    catch (std::exception& e) {
+    } catch (std::exception &e) {
         spdlog::warn(fmt::format("Could not parse CSV asset file: {}, reason: {}", path, e.what()));
         return false;
     }
@@ -76,7 +75,7 @@ bool BybitDownloader::P::readCandlesFromCSVFile(const std::string& path, std::ve
     return true;
 }
 
-bool BybitDownloader::P::writeCSVCandlesToZorroT6File(const std::string& csvPath, const std::string& t6Path) {
+bool BybitDownloader::P::writeCSVCandlesToZorroT6File(const std::string &csvPath, const std::string &t6Path) {
     const std::filesystem::path pathToT6File{t6Path};
 
     std::ofstream ofs;
@@ -95,7 +94,7 @@ bool BybitDownloader::P::writeCSVCandlesToZorroT6File(const std::string& csvPath
 
     auto numMSecondsForInterval = Bybit::numberOfMsForCandleInterval(bybit::CandleInterval::_1);
 
-    for (const auto& candle : std::ranges::reverse_view(candles)) {
+    for (const auto &candle: std::ranges::reverse_view(candles)) {
         T6 t6;
         t6.fOpen = static_cast<float>(candle.m_open);
         t6.fHigh = static_cast<float>(candle.m_high);
@@ -104,19 +103,19 @@ bool BybitDownloader::P::writeCSVCandlesToZorroT6File(const std::string& csvPath
         t6.fVal = 0.0;
         t6.fVol = static_cast<float>(candle.m_volume);
         t6.time = convertTimeMs(candle.m_startTime + numMSecondsForInterval);
-        ofs.write(reinterpret_cast<char*>(&t6), sizeof(T6));
+        ofs.write(reinterpret_cast<char *>(&t6), sizeof(T6));
     }
 
     ofs.close();
     return true;
 }
 
-void BybitDownloader::P::convertFromCSVToT6(const std::vector<std::filesystem::path>& filePaths,
-                                            const std::string& outDirPath) const {
-    std::vector<std::future<std::pair<std::string, bool>>> futures;
-    std::vector<std::pair<std::string, bool>> readyFutures;
+void BybitDownloader::P::convertFromCSVToT6(const std::vector<std::filesystem::path> &filePaths,
+                                            const std::string &outDirPath) const {
+    std::vector<std::future<std::pair<std::string, bool> > > futures;
+    std::vector<std::pair<std::string, bool> > readyFutures;
 
-    for (const auto& path : filePaths) {
+    for (const auto &path: filePaths) {
         if (path.empty()) {
             continue;
         }
@@ -128,8 +127,8 @@ void BybitDownloader::P::convertFromCSVToT6(const std::vector<std::filesystem::p
 
         futures.push_back(
             std::async(std::launch::async,
-                       [](const std::filesystem::path& csvPath, const std::filesystem::path& t6Path,
-                          Semaphore& maxJobs) -> std::pair<std::string, bool> {
+                       [](const std::filesystem::path &csvPath, const std::filesystem::path &t6Path,
+                          Semaphore &maxJobs) -> std::pair<std::string, bool> {
                            std::scoped_lock w(maxJobs);
                            std::pair<std::string, bool> retVal;
                            retVal.first = csvPath.filename().replace_extension("").string();
@@ -139,22 +138,20 @@ void BybitDownloader::P::convertFromCSVToT6(const std::vector<std::filesystem::p
     }
 
     do {
-        for (auto& future : futures) {
+        for (auto &future: futures) {
             if (isReady(future)) {
                 readyFutures.push_back(future.get());
                 if (readyFutures.back().second) {
                     spdlog::info(fmt::format("Symbol: {} converted", readyFutures.back().first));
-                }
-                else {
+                } else {
                     spdlog::error(fmt::format("Symbol: {} conversion failed", readyFutures.back().first));
                 }
             }
         }
-    }
-    while (readyFutures.size() < futures.size());
+    } while (readyFutures.size() < futures.size());
 }
 
-bool BybitDownloader::P::writeCandlesToCSVFile(const std::vector<Candle>& candles, const std::string& path) {
+bool BybitDownloader::P::writeCandlesToCSVFile(const std::vector<Candle> &candles, const std::string &path) {
     const std::filesystem::path pathToCSVFile{path};
 
     std::ofstream ofs;
@@ -169,17 +166,16 @@ bool BybitDownloader::P::writeCandlesToCSVFile(const std::vector<Candle>& candle
 
     try {
         fileSize = std::filesystem::file_size(pathToCSVFile.string());
-    }
-    catch (const std::filesystem::filesystem_error&) {
+    } catch (const std::filesystem::filesystem_error &) {
         fileSize = 0;
     }
 
     if (fileSize == 0) {
         ofs << "open_time,open,high,low,close,volume"
-            << std::endl;
+                << std::endl;
     }
 
-    for (const auto& candle : candles) {
+    for (const auto &candle: candles) {
         ofs << candle.m_startTime << ",";
         ofs << candle.m_open << ",";
         ofs << candle.m_high << ",";
@@ -192,7 +188,7 @@ bool BybitDownloader::P::writeCandlesToCSVFile(const std::vector<Candle>& candle
     return true;
 }
 
-int64_t BybitDownloader::P::checkSymbolCSVFile(const std::string& path) {
+int64_t BybitDownloader::P::checkSymbolCSVFile(const std::string &path) {
     constexpr int64_t oldestBybitDate = 1420070400000; /// Thursday 1. January 2015 0:00:00
 
     std::ifstream ifs;
@@ -230,8 +226,7 @@ int64_t BybitDownloader::P::checkSymbolCSVFile(const std::string& path) {
                 ifs.close();
                 return std::stoll(records[0]);
             }
-        }
-        else {
+        } else {
             row.push_back(c);
         }
     }
@@ -239,7 +234,7 @@ int64_t BybitDownloader::P::checkSymbolCSVFile(const std::string& path) {
     return oldestBybitDate;
 }
 
-int64_t BybitDownloader::P::checkFundingRatesCSVFile(const std::string& path) {
+int64_t BybitDownloader::P::checkFundingRatesCSVFile(const std::string &path) {
     constexpr int64_t oldestBybitDate = 1420070400000; /// Thursday 1. January 2015 0:00:00
 
     std::ifstream ifs;
@@ -277,8 +272,7 @@ int64_t BybitDownloader::P::checkFundingRatesCSVFile(const std::string& path) {
                 ifs.close();
                 return std::stoll(records[0]);
             }
-        }
-        else {
+        } else {
             row.push_back(c);
         }
     }
@@ -286,7 +280,7 @@ int64_t BybitDownloader::P::checkFundingRatesCSVFile(const std::string& path) {
     return oldestBybitDate;
 }
 
-bool BybitDownloader::P::writeFundingRatesToCSVFile(const std::vector<FundingRate>& fr, const std::string& path) {
+bool BybitDownloader::P::writeFundingRatesToCSVFile(const std::vector<FundingRate> &fr, const std::string &path) {
     const std::filesystem::path pathToCSVFile{path};
 
     std::ofstream ofs;
@@ -301,18 +295,17 @@ bool BybitDownloader::P::writeFundingRatesToCSVFile(const std::vector<FundingRat
 
     try {
         fileSize = std::filesystem::file_size(pathToCSVFile.string());
-    }
-    catch (const std::filesystem::filesystem_error&) {
+    } catch (const std::filesystem::filesystem_error &) {
         fileSize = 0;
     }
 
 
     if (fileSize == 0) {
         ofs << "funding_time,funding_rate"
-            << std::endl;
+                << std::endl;
     }
 
-    for (const auto& record : fr) {
+    for (const auto &record: fr) {
         ofs << record.m_fundingRateTimestamp << ",";
         ofs << record.m_fundingRate << std::endl;
     }
@@ -322,27 +315,27 @@ bool BybitDownloader::P::writeFundingRatesToCSVFile(const std::vector<FundingRat
     return true;
 }
 
-void BybitDownloader::updateMarketData(const std::string& dirPath,
-                                       const std::vector<std::string>& symbols,
+void BybitDownloader::updateMarketData(const std::string &dirPath,
+                                       const std::vector<std::string> &symbols,
                                        CandleInterval candleInterval,
-                                       const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                                       const onSymbolCompleted& onSymbolCompletedCB) const {
+                                       const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                                       const onSymbolCompleted &onSymbolCompletedCB) const {
     auto category = Category::linear;
     std::string csvDirName;
     std::string t6DirName;
     std::vector<std::string> symbolsToDelete;
 
     switch (m_p->m_marketCategory) {
-    case MarketCategory::Spot:
-        category = Category::spot;
-        csvDirName = CSV_SPOT_DIR;
-        t6DirName = T6_SPOT_DIR;
-        break;
-    case MarketCategory::Futures:
-        category = Category::linear;
-        csvDirName = CSV_FUT_DIR;
-        t6DirName = T6_FUT_DIR;
-        break;
+        case MarketCategory::Spot:
+            category = Category::spot;
+            csvDirName = CSV_SPOT_DIR;
+            t6DirName = T6_SPOT_DIR;
+            break;
+        case MarketCategory::Futures:
+            category = Category::linear;
+            csvDirName = CSV_FUT_DIR;
+            t6DirName = T6_FUT_DIR;
+            break;
     }
     const auto barSizeInMinutes = static_cast<std::underlying_type_t<CandleInterval>>(candleInterval) / 60;
     auto bybitCandleInterval = bybit::CandleInterval::_1;
@@ -351,7 +344,7 @@ void BybitDownloader::updateMarketData(const std::string& dirPath,
         throw std::invalid_argument("invalid Bybit candle resolution: " + std::to_string(barSizeInMinutes) + " m");
     }
 
-    std::vector<std::future<std::filesystem::path>> futures;
+    std::vector<std::future<std::filesystem::path> > futures;
     const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
@@ -360,20 +353,18 @@ void BybitDownloader::updateMarketData(const std::string& dirPath,
 
     if (symbolsToUpdate.empty()) {
         spdlog::info(fmt::format("Updating all symbols"));
-    }
-    else {
+    } else {
         spdlog::info(fmt::format("Updating symbols: {}", fmt::join(symbols, ", ")));
     }
 
     std::vector<Instrument> exchangeSymbols = m_p->m_bybitClient->getInstrumentsInfo(category);
 
     if (symbolsToUpdate.empty()) {
-        for (const auto& el : exchangeSymbols) {
+        for (const auto &el: exchangeSymbols) {
             if (el.m_quoteCoin == "USDT") {
                 if (el.m_contractStatus == ContractStatus::Trading) {
                     symbolsToUpdate.push_back(el.m_symbol);
-                }
-                else {
+                } else {
                     symbolsToDelete.push_back(el.m_symbol);
                 }
             }
@@ -398,12 +389,12 @@ void BybitDownloader::updateMarketData(const std::string& dirPath,
         symbolsToUpdate = tempSymbols;
     }
 
-    for (const auto& s : symbolsToUpdate) {
+    for (const auto &s: symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
                        [finalPath, this, &bybitCandleInterval, &barSizeInMinutes, &category, &csvDirName, &t6DirName](
-                       const std::string& symbol,
-                       Semaphore& maxJobs) -> std::filesystem::path {
+                   const std::string &symbol,
+                   Semaphore &maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
                            std::filesystem::path symbolFilePathCsv = finalPath;
                            std::filesystem::path symbolFilePathT6 = finalPath;
@@ -412,17 +403,13 @@ void BybitDownloader::updateMarketData(const std::string& dirPath,
                            symbolFilePathT6.append(t6DirName);
 
                            symbolFilePathCsv.append(Downloader::minutesToString(barSizeInMinutes));
-                           symbolFilePathT6.append(Downloader::minutesToString(barSizeInMinutes));
-
-                           {
+                           symbolFilePathT6.append(Downloader::minutesToString(barSizeInMinutes)); {
                                if (const auto err = createDirectoryRecursively(symbolFilePathCsv.string())) {
                                    throw std::runtime_error(fmt::format("Failed to create {}, err: {}",
                                                                         symbolFilePathCsv.string(),
                                                                         err.message().c_str()));
                                }
-                           }
-
-                           {
+                           } {
                                if (const auto err = createDirectoryRecursively(symbolFilePathT6.string())) {
                                    throw std::runtime_error(fmt::format("Failed to create {}, err: {}",
                                                                         symbolFilePathCsv.string(),
@@ -453,14 +440,15 @@ void BybitDownloader::updateMarketData(const std::string& dirPath,
                                    symbol,
                                    bybitCandleInterval,
                                    fromTimeStamp + 1000,
-                                   nowTimestamp, 200);
+                                   nowTimestamp, 200, [symbolFilePathCsv, symbol](const std::vector<Candle> &cnd) {
+                                       if (!cnd.empty()) {
+                                           if (!P::writeCandlesToCSVFile(cnd, symbolFilePathCsv.string())) {
+                                               spdlog::warn(fmt::format("CSV file for symbol: {} update failed", symbol));
+                                           }
+                                       }
+                                   });
 
-                               if (!candles.empty()) {
-                                   if (P::writeCandlesToCSVFile(candles, symbolFilePathCsv.string())) {
-                                       spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
-                                       return symbolFilePathCsv;
-                                   }
-                               }
+                               return symbolFilePathCsv;
                            } catch (const std::exception &e) {
                                spdlog::warn(fmt::format("Updating candles for symbol: {} failed, reason: {}",
                                                         symbol, e.what()));
@@ -470,13 +458,12 @@ void BybitDownloader::updateMarketData(const std::string& dirPath,
     }
 
     do {
-        for (auto& future : futures) {
+        for (auto &future: futures) {
             if (isReady(future)) {
                 csvFilePaths.push_back(future.get());
             }
         }
-    }
-    while (csvFilePaths.size() < futures.size());
+    } while (csvFilePaths.size() < futures.size());
 
     std::filesystem::path T6Directory = finalPath;
 
@@ -488,7 +475,7 @@ void BybitDownloader::updateMarketData(const std::string& dirPath,
         m_p->convertFromCSVToT6(csvFilePaths, T6Directory.string());
     }
 
-    for (const auto& symbol : symbolsToDelete) {
+    for (const auto &symbol: symbolsToDelete) {
         std::filesystem::path symbolFilePathCsv = finalPath;
         std::filesystem::path symbolFilePathT6 = finalPath;
 
@@ -516,17 +503,17 @@ void BybitDownloader::updateMarketData(const std::string& dirPath,
     }
 }
 
-void BybitDownloader::updateMarketData(const std::string& connectionString,
-                                       const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                                       const onSymbolCompleted& onSymbolCompletedCB) const {
+void BybitDownloader::updateMarketData(const std::string &connectionString,
+                                       const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                                       const onSymbolCompleted &onSymbolCompletedCB) const {
     throw std::runtime_error("Unimplemented: BybitDownloader::updateMarketData");
 }
 
-void BybitDownloader::updateFundingRateData(const std::string& dirPath,
-                                            const std::vector<std::string>& symbols,
-                                            const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                                            const onSymbolCompleted& onSymbolCompletedCB) const {
-    std::vector<std::future<std::filesystem::path>> futures;
+void BybitDownloader::updateFundingRateData(const std::string &dirPath,
+                                            const std::vector<std::string> &symbols,
+                                            const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                                            const onSymbolCompleted &onSymbolCompletedCB) const {
+    std::vector<std::future<std::filesystem::path> > futures;
     const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
@@ -536,8 +523,7 @@ void BybitDownloader::updateFundingRateData(const std::string& dirPath,
 
     if (symbolsToUpdate.empty()) {
         spdlog::info(fmt::format("Updating all symbols"));
-    }
-    else {
+    } else {
         spdlog::info(fmt::format("Updating symbols: {}", fmt::join(symbols, ", ")));
     }
 
@@ -546,7 +532,7 @@ void BybitDownloader::updateFundingRateData(const std::string& dirPath,
     if (symbolsToUpdate.empty()) {
         constexpr auto symbolContract = ContractType::LinearPerpetual;
 
-        for (const auto& el : instrumentsInfo) {
+        for (const auto &el: instrumentsInfo) {
             if (el.m_contractType == symbolContract && el.m_quoteCoin == "USDT") {
                 if (el.m_contractStatus == ContractStatus::Trading) {
                     symbolsToUpdate.push_back(el.m_symbol);
@@ -575,18 +561,19 @@ void BybitDownloader::updateFundingRateData(const std::string& dirPath,
         symbolsToUpdate = tempSymbols;
     }
 
-    for (const auto& s : symbolsToUpdate) {
+    for (const auto &s: symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [finalPath, this](const std::string& symbol,
-                                          Semaphore& maxJobs) -> std::filesystem::path {
+                       [finalPath, this](const std::string &symbol,
+                                         Semaphore &maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
                            std::filesystem::path symbolFilePathCsv = finalPath;
 
 
                            symbolFilePathCsv.append(CSV_FUT_DIR);
 
-                           if (const auto err = createDirectoryRecursively(symbolFilePathCsv.string()); err.value() !=0) {
+                           if (const auto err = createDirectoryRecursively(symbolFilePathCsv.string());
+                               err.value() != 0) {
                                throw std::runtime_error(fmt::format("Failed to create directory: {}, error: {}",
                                                                     symbolFilePathCsv.string(), err.value()));
                            }
@@ -623,15 +610,14 @@ void BybitDownloader::updateFundingRateData(const std::string& dirPath,
     }
 
     do {
-        for (auto& future : futures) {
+        for (auto &future: futures) {
             if (isReady(future)) {
                 csvFilePaths.push_back(future.get());
             }
         }
-    }
-    while (csvFilePaths.size() < futures.size());
+    } while (csvFilePaths.size() < futures.size());
 
-    for (const auto& symbol : symbolsToDelete) {
+    for (const auto &symbol: symbolsToDelete) {
         std::filesystem::path symbolFilePathCsv = finalPath;
         symbolFilePathCsv.append(CSV_FUT_DIR);
         symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
