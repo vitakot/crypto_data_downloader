@@ -25,7 +25,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #ifdef _WIN32
 #include "magic_enum/magic_enum.hpp"
 #else
-#include "magic_enum.hpp"
+#include "magic_enum/magic_enum.hpp"
 #endif
 
 using namespace vk::binance;
