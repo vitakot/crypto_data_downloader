@@ -20,7 +20,7 @@ class BinanceFuturesDownloader final : public IExchangeDownloader {
     std::unique_ptr<P> m_p{};
 
 public:
-    explicit BinanceFuturesDownloader(std::uint32_t maxJobs);
+    explicit BinanceFuturesDownloader(std::uint32_t maxJobs, bool deleteDelistedData = false);
 
     ~BinanceFuturesDownloader() override;
 

@@ -58,6 +58,7 @@ int main(int argc, char** argv) {
     std::string outputDirectory;
     std::string dataType;
     std::string exchange;
+    std::string delistedAction;
     int32_t barSizeInMinutes = 1;
     auto marketCategory = MarketCategory::Futures;
     std::uint32_t maxJobs = static_cast<std::uint32_t>(std::max(std::floor(std::thread::hardware_concurrency() * 0.75),
@@ -83,6 +84,8 @@ int main(int argc, char** argv) {
          cxxopts::value<int32_t>()->default_value("1"))
         ("c,category", R"(Market category, either Spot (s) or Futures (f), example -c f, default is Futures)",
          cxxopts::value<std::string>()->default_value("f"))
+        ("d,delisted", R"(Action for delisted symbols data, 'k' = keep files, 'd' = delete files, example -d k, default is keep)",
+         cxxopts::value<std::string>()->default_value("k"))
         ("v,version", R"(Print version and quit)")
         ("h,help", R"(Print usage and quit)");
     try {
@@ -219,6 +222,14 @@ int main(int argc, char** argv) {
         else {
             marketCategory = MarketCategory::Futures;
         }
+
+        delistedAction = parseResult["delisted"].as<std::string>();
+
+        if (delistedAction != "k" && delistedAction != "d") {
+            spdlog::error("Wrong value of delisted parameter, must be 'k' or 'd', is: {}", delistedAction);
+            spdlog::info(options.help());
+            return -1;
+        }
     }
     catch (const std::exception&) {
         spdlog::critical("Wrong parameters!");
@@ -238,17 +249,19 @@ int main(int argc, char** argv) {
         std::unique_ptr<IExchangeDownloader> downloader;
         const auto candleInterval = Downloader::minutesToCandleInterval(barSizeInMinutes);
 
+        const bool deleteDelistedData = (delistedAction == "d");
+
         if (exchange == "bnb" && marketCategory == MarketCategory::Futures) {
-            downloader = std::make_unique<BinanceFuturesDownloader>(maxJobs);
+            downloader = std::make_unique<BinanceFuturesDownloader>(maxJobs, deleteDelistedData);
         }
         else if (exchange == "bnb" && marketCategory == MarketCategory::Spot) {
-            downloader = std::make_unique<BinanceSpotDownloader>(maxJobs);
+            downloader = std::make_unique<BinanceSpotDownloader>(maxJobs, deleteDelistedData);
         }
         else if (exchange == "bybit") {
             spdlog::info(
                 "Limiting number of parallel jobs to 1, Bybit Rate limiting does not work according to Docs "
                 "(missing header values in response)");
-            downloader = std::make_unique<BybitDownloader>(1, marketCategory);
+            downloader = std::make_unique<BybitDownloader>(1, marketCategory, deleteDelistedData);
         }
         else if (exchange == "okx") {
             if (marketCategory == MarketCategory::Spot) {
@@ -256,7 +269,7 @@ int main(int argc, char** argv) {
                     "Unsupported market category: {} for OKX exchange", magic_enum::enum_name(marketCategory));
                 return 0;
             }
-            downloader = std::make_unique<OKXDownloader>(maxJobs);
+            downloader = std::make_unique<OKXDownloader>(maxJobs, deleteDelistedData);
         }
 
         if (dataType == "c") {

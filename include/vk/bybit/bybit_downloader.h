@@ -20,7 +20,7 @@ class BybitDownloader final : public IExchangeDownloader {
     std::unique_ptr<P> m_p{};
 
 public:
-    explicit BybitDownloader(std::uint32_t maxJobs, MarketCategory marketCategory);
+    explicit BybitDownloader(std::uint32_t maxJobs, MarketCategory marketCategory, bool deleteDelistedData = false);
 
     ~BybitDownloader() override;
 

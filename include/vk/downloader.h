@@ -13,6 +13,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 
 namespace vk {
 static auto CSV_FUT_DIR = "csvFut";
+static auto CSV_FUT_FR_DIR = "csvFr";
 static auto CSV_SPOT_DIR = "csvSpot";
 static auto T6_FUT_DIR = "t6Fut";
 static auto T6_SPOT_DIR = "t6Spot";
