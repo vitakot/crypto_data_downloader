@@ -30,6 +30,7 @@ struct BybitDownloader::P {
     mutable std::recursive_mutex m_locker;
     Semaphore m_maxConcurrentDownloadJobs{2};
     MarketCategory m_marketCategory = MarketCategory::Futures;
+    bool m_deleteDelistedData = false;
 
     static bool writeCSVCandlesToZorroT6File(const std::string &csvPath, const std::string &t6Path);
 
@@ -45,13 +46,14 @@ struct BybitDownloader::P {
 
     static bool writeFundingRatesToCSVFile(const std::vector<FundingRate> &fr, const std::string &path);
 
-    explicit P(const std::uint32_t maxJobs) : m_bybitClient(std::make_unique<RESTClient>("", "")),
-                                              maxConcurrentConvertJobs(maxJobs) {
+    explicit P(const std::uint32_t maxJobs, const bool deleteDelistedData) : m_bybitClient(std::make_unique<RESTClient>("", "")),
+                                              maxConcurrentConvertJobs(maxJobs),
+                                              m_deleteDelistedData(deleteDelistedData) {
     }
 };
 
-BybitDownloader::BybitDownloader(std::uint32_t maxJobs, const MarketCategory marketCategory) : m_p(
-    std::make_unique<P>(maxJobs)) {
+BybitDownloader::BybitDownloader(std::uint32_t maxJobs, const MarketCategory marketCategory, bool deleteDelistedData) : m_p(
+    std::make_unique<P>(maxJobs, deleteDelistedData)) {
     m_p->m_marketCategory = marketCategory;
 }
 
@@ -380,7 +382,7 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
             if (it == exchangeSymbols.end() || it->m_contractStatus != ContractStatus::Trading) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format(
-                    "Symbol: {} not found on Exchange, probably delisted, data files will be removed...", symbol));
+                    "Symbol: {} not found on Exchange, probably delisted", symbol));
             } else {
                 tempSymbols.push_back(it->m_symbol);
             }
@@ -475,30 +477,32 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
         m_p->convertFromCSVToT6(csvFilePaths, T6Directory.string());
     }
 
-    for (const auto &symbol: symbolsToDelete) {
-        std::filesystem::path symbolFilePathCsv = finalPath;
-        std::filesystem::path symbolFilePathT6 = finalPath;
+    if (m_p->m_deleteDelistedData) {
+        for (const auto &symbol: symbolsToDelete) {
+            std::filesystem::path symbolFilePathCsv = finalPath;
+            std::filesystem::path symbolFilePathT6 = finalPath;
 
-        symbolFilePathCsv.append(csvDirName);
-        symbolFilePathT6.append(t6DirName);
+            symbolFilePathCsv.append(csvDirName);
+            symbolFilePathT6.append(t6DirName);
 
-        symbolFilePathCsv.append(Downloader::minutesToString(barSizeInMinutes));
-        symbolFilePathT6.append(Downloader::minutesToString(barSizeInMinutes));
+            symbolFilePathCsv.append(Downloader::minutesToString(barSizeInMinutes));
+            symbolFilePathT6.append(Downloader::minutesToString(barSizeInMinutes));
 
-        symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
-        symbolFilePathT6 = symbolFilePathT6.lexically_normal();
+            symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
+            symbolFilePathT6 = symbolFilePathT6.lexically_normal();
 
-        symbolFilePathCsv.append(symbol + ".csv");
-        symbolFilePathT6.append(symbol + ".t6");
+            symbolFilePathCsv.append(symbol + ".csv");
+            symbolFilePathT6.append(symbol + ".t6");
 
-        if (std::filesystem::exists(symbolFilePathCsv)) {
-            std::filesystem::remove(symbolFilePathCsv);
-            spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol, symbolFilePathCsv.string());
-        }
+            if (std::filesystem::exists(symbolFilePathCsv)) {
+                std::filesystem::remove(symbolFilePathCsv);
+                spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol, symbolFilePathCsv.string());
+            }
 
-        if (std::filesystem::exists(symbolFilePathT6)) {
-            std::filesystem::remove(symbolFilePathT6);
-            spdlog::info("Removing t6 file for delisted symbol: {}, file: {}...", symbol, symbolFilePathT6.string());
+            if (std::filesystem::exists(symbolFilePathT6)) {
+                std::filesystem::remove(symbolFilePathT6);
+                spdlog::info("Removing t6 file for delisted symbol: {}, file: {}...", symbol, symbolFilePathT6.string());
+            }
         }
     }
 }
@@ -552,7 +556,7 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
             if (it == instrumentsInfo.end() || it->m_contractStatus != ContractStatus::Trading) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format(
-                    "Symbol: {} not found on Exchange, probably delisted, data files will be removed...", symbol));
+                    "Symbol: {} not found on Exchange, probably delisted", symbol));
             } else {
                 tempSymbols.push_back(it->m_symbol);
             }
@@ -570,7 +574,7 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
                            std::filesystem::path symbolFilePathCsv = finalPath;
 
 
-                           symbolFilePathCsv.append(CSV_FUT_DIR);
+                           symbolFilePathCsv.append(CSV_FUT_FR_DIR);
 
                            if (const auto err = createDirectoryRecursively(symbolFilePathCsv.string());
                                err.value() != 0) {
@@ -617,15 +621,17 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
         }
     } while (csvFilePaths.size() < futures.size());
 
-    for (const auto &symbol: symbolsToDelete) {
-        std::filesystem::path symbolFilePathCsv = finalPath;
-        symbolFilePathCsv.append(CSV_FUT_DIR);
-        symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
-        symbolFilePathCsv.append(symbol + "_fr.csv");
+    if (m_p->m_deleteDelistedData) {
+        for (const auto &symbol: symbolsToDelete) {
+            std::filesystem::path symbolFilePathCsv = finalPath;
+            symbolFilePathCsv.append(CSV_FUT_DIR);
+            symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
+            symbolFilePathCsv.append(symbol + "_fr.csv");
 
-        if (std::filesystem::exists(symbolFilePathCsv)) {
-            std::filesystem::remove(symbolFilePathCsv);
-            spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol, symbolFilePathCsv.string());
+            if (std::filesystem::exists(symbolFilePathCsv)) {
+                std::filesystem::remove(symbolFilePathCsv);
+                spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol, symbolFilePathCsv.string());
+            }
         }
     }
 }

@@ -20,7 +20,7 @@ class OKXDownloader final : public IExchangeDownloader {
     std::unique_ptr<P> m_p{};
 
 public:
-    explicit OKXDownloader(std::uint32_t maxJobs);
+    explicit OKXDownloader(std::uint32_t maxJobs, bool deleteDelistedData = false);
 
     ~OKXDownloader() override;
 
