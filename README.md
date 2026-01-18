@@ -8,14 +8,14 @@ A high-performance command-line utility for downloading historical market data (
 
 ## Features
 
-- 🏦 **Multi-Exchange Support**: Binance, Bybit, and OKX
-- 📊 **Multiple Data Types**: OHLCV candles and funding rate history
-- ⚡ **Parallel Downloads**: Configurable concurrent job processing
-- 📁 **Flexible Output**: CSV format with optional T6 (Zorro) conversion
-- 🔄 **Incremental Updates**: Only downloads new data since last run
-- 🎯 **Symbol Filtering**: Download specific symbols or all available pairs
-- 📈 **Multiple Timeframes**: Support for various bar sizes (1m, 5m, 15m, 1h, etc.)
-- 🏷️ **Market Categories**: Supports both Spot and Futures markets
+- **Multi-Exchange Support**: Binance, Bybit, and OKX
+- **Multiple Data Types**: OHLCV candles and funding rate history
+- **Parallel Downloads**: Configurable concurrent job processing
+- **Flexible Output**: CSV format with optional T6 (Zorro) conversion
+- **Incremental Updates**: Only downloads new data since last run
+- **Symbol Filtering**: Download specific symbols or all available pairs
+- **Multiple Timeframes**: Support for various bar sizes (1m, 5m, 15m, 1h, etc.)
+- **Market Categories**: Supports both Spot and Futures markets
 
 ## Supported Exchanges
 
