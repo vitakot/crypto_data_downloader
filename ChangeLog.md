@@ -22,3 +22,6 @@ All notable changes to this project will be documented in this file. This projec
 - 
 ## [2.1.5](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.5) (2025-11-17)
 - Add continuous download for Bybit
+
+## [2.1.6](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.5) (2026-01-18)
+- Add option for handling delisted symbols data (keep or delete)
