@@ -18,11 +18,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include "vk/utils/utils.h"
 #include "vk/utils/semaphore.h"
 
-#ifdef _WIN32
-#include "magic_enum/magic_enum.hpp"
-#else
-#include "magic_enum/magic_enum.hpp"
-#endif
+#include "vk/utils/magic_enum_wrapper.hpp"
 
 namespace vk::binance {
 
