@@ -321,7 +321,8 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
                                        const std::vector<std::string> &symbols,
                                        CandleInterval candleInterval,
                                        const onSymbolsToUpdate &onSymbolsToUpdateCB,
-                                       const onSymbolCompleted &onSymbolCompletedCB) const {
+                                       const onSymbolCompleted &onSymbolCompletedCB,
+                                       const bool convertToT6) const {
     auto category = Category::linear;
     std::string csvDirName;
     std::string t6DirName;
@@ -394,7 +395,7 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
     for (const auto &s: symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [finalPath, this, &bybitCandleInterval, &barSizeInMinutes, &category, &csvDirName, &t6DirName](
+                       [finalPath, this, &bybitCandleInterval, &barSizeInMinutes, &category, &csvDirName, &t6DirName, convertToT6](
                    const std::string &symbol,
                    Semaphore &maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
@@ -405,13 +406,15 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
                            symbolFilePathT6.append(t6DirName);
 
                            symbolFilePathCsv.append(Downloader::minutesToString(barSizeInMinutes));
-                           symbolFilePathT6.append(Downloader::minutesToString(barSizeInMinutes)); {
+                           symbolFilePathT6.append(Downloader::minutesToString(barSizeInMinutes));
+                           {
                                if (const auto err = createDirectoryRecursively(symbolFilePathCsv.string())) {
                                    throw std::runtime_error(fmt::format("Failed to create {}, err: {}",
                                                                         symbolFilePathCsv.string(),
                                                                         err.message().c_str()));
                                }
-                           } {
+                           }
+                           if (convertToT6) {
                                if (const auto err = createDirectoryRecursively(symbolFilePathT6.string())) {
                                    throw std::runtime_error(fmt::format("Failed to create {}, err: {}",
                                                                         symbolFilePathCsv.string(),
@@ -472,7 +475,10 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
     T6Directory.append(t6DirName);
     T6Directory.append(Downloader::minutesToString(barSizeInMinutes));
 
-    if (!csvFilePaths.empty()) {
+    if (convertToT6 && !csvFilePaths.empty()) {
+        if (const auto err = createDirectoryRecursively(T6Directory.string())) {
+            throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(), err.message().c_str()));
+        }
         spdlog::info(fmt::format("Converting from csv to t6..."));
         m_p->convertFromCSVToT6(csvFilePaths, T6Directory.string());
     }

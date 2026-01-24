@@ -327,7 +327,8 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
                                      const std::vector<std::string>& symbols,
                                      CandleInterval candleInterval,
                                      const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                                     const onSymbolCompleted& onSymbolCompletedCB) const {
+                                     const onSymbolCompleted& onSymbolCompletedCB,
+                                     const bool convertToT6) const {
     auto okxBarSize = okx::BarSize::_1m;
     const auto barSizeInMinutes = static_cast<std::underlying_type_t<CandleInterval>>(candleInterval) / 60;
 
@@ -384,7 +385,7 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
     for (const auto& s : symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [finalPath, this, &okxBarSize, &barSizeInMinutes](const std::string& symbol,
+                       [finalPath, this, &okxBarSize, &barSizeInMinutes, convertToT6](const std::string& symbol,
                                                                           Semaphore& maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
                            std::filesystem::path symbolFilePathCsv = finalPath;
@@ -404,7 +405,7 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
                                }
                            }
 
-                           {
+                           if (convertToT6) {
                                if (const auto err = createDirectoryRecursively(symbolFilePathT6.string())) {
                                    throw std::runtime_error(fmt::format("Failed to create {}, err: {}",
                                                                         symbolFilePathCsv.string(),
@@ -430,8 +431,11 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
                                if (!candles.empty()) {
                                    if (P::writeCandlesToCSVFile(candles, symbolFilePathCsv.string())) {
                                        spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
-                                       return symbolFilePathCsv;
                                    }
+                               }
+                               // Return the path if the CSV file exists (for T6 conversion)
+                               if (std::filesystem::exists(symbolFilePathCsv)) {
+                                   return symbolFilePathCsv;
                                }
                            } catch (const std::exception &e) {
                                spdlog::warn(fmt::format("Updating candles for symbol: {} failed, reason: {}",
@@ -455,7 +459,10 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
     T6Directory.append(T6_FUT_DIR);
     T6Directory.append(Downloader::minutesToString(barSizeInMinutes));
 
-    if (!csvFilePaths.empty()) {
+    if (convertToT6 && !csvFilePaths.empty()) {
+        if (const auto err = createDirectoryRecursively(T6Directory.string())) {
+            throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(), err.message().c_str()));
+        }
         spdlog::info(fmt::format("Converting from csv to t6..."));
         m_p->convertFromCSVToT6(csvFilePaths, T6Directory.string());
     }
