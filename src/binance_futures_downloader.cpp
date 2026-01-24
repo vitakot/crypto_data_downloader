@@ -198,7 +198,8 @@ bool BinanceFuturesDownloader::P::writeFundingRatesToCSVFile(const std::vector<f
 void BinanceFuturesDownloader::updateMarketData(const std::string& dirPath, const std::vector<std::string>& symbols,
                                                           CandleInterval candleInterval,
                                                           const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                                                          const onSymbolCompleted& onSymbolCompletedCB) const {
+                                                          const onSymbolCompleted& onSymbolCompletedCB,
+                                                          const bool convertToT6) const {
     auto bnbCandleInterval = binance::CandleInterval::_1m;
     const auto barSizeInMinutes = static_cast<std::underlying_type_t<CandleInterval>>(candleInterval) / 60;
 
@@ -267,7 +268,7 @@ void BinanceFuturesDownloader::updateMarketData(const std::string& dirPath, cons
     for (const auto& s : symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [finalPath, this, &bnbCandleInterval, &barSizeInMinutes](const std::string& symbol,
+                       [finalPath, this, &bnbCandleInterval, &barSizeInMinutes, convertToT6](const std::string& symbol,
                        Semaphore& maxJobs) ->
                        std::filesystem::path {
                            std::scoped_lock w(maxJobs);
@@ -289,7 +290,7 @@ void BinanceFuturesDownloader::updateMarketData(const std::string& dirPath, cons
                                }
                            }
 
-                           {
+                           if (convertToT6) {
                                if (const auto err = createDirectoryRecursively(symbolFilePathT6.string())) {
                                    throw std::runtime_error(fmt::format("Failed to create {}, err: {}", symbolFilePathCsv.string(),err.message().c_str()));
                                }
@@ -316,8 +317,11 @@ void BinanceFuturesDownloader::updateMarketData(const std::string& dirPath, cons
                                if (!candles.empty()) {
                                    if (BinanceCommon::writeCandlesToCSVFile(candles, symbolFilePathCsv.string())) {
                                        spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
-                                       return symbolFilePathCsv;
                                    }
+                               }
+                               // Return the path if the CSV file exists (for T6 conversion)
+                               if (std::filesystem::exists(symbolFilePathCsv)) {
+                                   return symbolFilePathCsv;
                                }
                            }
                            catch (const std::exception& e) {
@@ -342,7 +346,10 @@ void BinanceFuturesDownloader::updateMarketData(const std::string& dirPath, cons
     T6Directory.append(T6_FUT_DIR);
     T6Directory.append(Downloader::minutesToString(barSizeInMinutes));
 
-    if (!csvFilePaths.empty()) {
+    if (convertToT6 && !csvFilePaths.empty()) {
+        if (const auto err = createDirectoryRecursively(T6Directory.string())) {
+            throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(), err.message().c_str()));
+        }
         spdlog::info(fmt::format("Converting from csv to t6..."));
         m_p->m_binanceCommon->convertFromCSVToT6(csvFilePaths, T6Directory.string());
     }

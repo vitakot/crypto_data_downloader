@@ -28,7 +28,8 @@ public:
                           const std::vector<std::string>& symbols,
                           CandleInterval candleInterval,
                           const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                          const onSymbolCompleted& onSymbolCompletedCB) const override;
+                          const onSymbolCompleted& onSymbolCompletedCB,
+                          bool convertToT6 = false) const override;
 
     void updateMarketData(const std::string& connectionString,
                           const onSymbolsToUpdate& onSymbolsToUpdateCB,
