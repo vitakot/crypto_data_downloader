@@ -33,7 +33,9 @@ struct OKXDownloader::P {
 
     static int64_t checkSymbolCSVFile(const std::string &path);
 
-    static bool writeCandlesToCSVFile(const std::vector<Candle> &candles, const std::string &path);
+    static bool writeCandlesToCSVFile(const std::vector<Candle> &candles, const std::string &path, bool rewrite);
+
+    static bool reverseCandlesInCSVFile(const std::string &path);
 
     static bool readCandlesFromCSVFile(const std::string &path, std::vector<Candle> &candles);
 
@@ -157,11 +159,17 @@ void OKXDownloader::P::convertFromCSVToT6(const std::vector<std::filesystem::pat
     } while (readyFutures.size() < futures.size());
 }
 
-bool OKXDownloader::P::writeCandlesToCSVFile(const std::vector<Candle> &candles, const std::string &path) {
+bool OKXDownloader::P::writeCandlesToCSVFile(const std::vector<Candle> &candles, const std::string &path,
+                                             const bool rewrite) {
     const std::filesystem::path pathToCSVFile{path};
 
     std::ofstream ofs;
-    ofs.open(pathToCSVFile.string(), std::ios::app);
+
+    if (!rewrite) {
+        ofs.open(pathToCSVFile.string(), std::ios::app);
+    } else {
+        ofs.open(pathToCSVFile.string(), std::ios::trunc);
+    }
 
     if (!ofs.is_open()) {
         spdlog::error(fmt::format("Couldn't open file: {}", path));
@@ -177,7 +185,7 @@ bool OKXDownloader::P::writeCandlesToCSVFile(const std::vector<Candle> &candles,
     }
 
     if (fileSize == 0) {
-        ofs << "open_time,open,high,low,close,volume,vol_ccy,vol_ccy_quote"<< std::endl;
+        ofs << "open_time,open,high,low,close,volume,vol_ccy,vol_ccy_quote" << std::endl;
     }
 
     for (const auto &candle: candles) {
@@ -193,6 +201,15 @@ bool OKXDownloader::P::writeCandlesToCSVFile(const std::vector<Candle> &candles,
 
     ofs.close();
     return true;
+}
+
+bool OKXDownloader::P::reverseCandlesInCSVFile(const std::string &path) {
+    if (std::vector<Candle> candles; readCandlesFromCSVFile(path, candles)) {
+        std::ranges::reverse(candles);
+        return writeCandlesToCSVFile(candles, path, true);
+    }
+
+    return false;
 }
 
 int64_t OKXDownloader::P::checkSymbolCSVFile(const std::string &path) {
@@ -225,7 +242,7 @@ int64_t OKXDownloader::P::checkSymbolCSVFile(const std::string &path) {
 
                 const auto records = splitString(row, ',');
 
-                if (records.size() != 6) {
+                if (records.size() != 8) {
                     spdlog::error(fmt::format("Wrong records number in the CSV file: {}", path));
                     ifs.close();
                     return oldestBybitDate;
@@ -402,7 +419,8 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
     for (const auto &s: symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [finalPath, this, &okxBarSize, &barSizeInMinutes, &csvDirName, &t6DirName, convertToT6](const std::string &symbol,
+                       [finalPath, this, &okxBarSize, &barSizeInMinutes, &csvDirName, &t6DirName, convertToT6](
+                   const std::string &symbol,
                    Semaphore &maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
                            std::filesystem::path symbolFilePathCsv = finalPath;
@@ -443,11 +461,19 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                                    fromTimeStamp,
                                    nowTimestamp, 100, [symbolFilePathCsv, symbol](const std::vector<Candle> &cnd) {
                                        if (!cnd.empty()) {
-                                           if (!P::writeCandlesToCSVFile(cnd, symbolFilePathCsv.string())) {
-                                               spdlog::warn(fmt::format("CSV file for symbol: {} update failed", symbol));
+                                           if (!P::writeCandlesToCSVFile(cnd, symbolFilePathCsv.string(), false)) {
+                                               spdlog::warn(
+                                                   fmt::format("CSV file for symbol: {} update failed", symbol));
                                            }
                                        }
                                    });
+
+                               if (!P::reverseCandlesInCSVFile(symbolFilePathCsv.string())) {
+                                   spdlog::warn(fmt::format(
+                                       "CSV file for symbol: {} reversion failed, removing data...", symbol));
+                                   std::filesystem::remove(symbolFilePathCsv);
+                                   return "";
+                               }
 
                                // Return the path if the CSV file exists (for T6 conversion)
                                if (std::filesystem::exists(symbolFilePathCsv)) {
@@ -596,7 +622,7 @@ void OKXDownloader::updateFundingRateData(const std::string &dirPath,
                            const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
 
                            const auto fr = m_p->okxClient->getFundingRates(symbol, fromTimeStamp, nowTimestamp,
-                                                                             1000);
+                                                                           1000);
 
                            try {
                                if (!fr.empty()) {
