@@ -8,7 +8,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 
 #include "vk/okx/okx_downloader.h"
 #include "vk/okx/okx.h"
-#include "vk/okx/okx_futures_rest_client.h"
+#include "vk/okx/okx_rest_client.h"
 #include "vk/downloader.h"
 #include "vk/utils/utils.h"
 #include "vk/utils/semaphore.h"
@@ -18,58 +18,62 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/ranges.h>
 
-using namespace vk::okx::futures;
+using namespace vk::okx;
 
 namespace vk {
 struct OKXDownloader::P {
-    std::unique_ptr<RESTClient> m_okxClient;
+    std::unique_ptr<RESTClient> okxClient;
     mutable Semaphore maxConcurrentConvertJobs;
-    mutable std::recursive_mutex m_locker;
-    Semaphore m_maxConcurrentDownloadJobs{3};
-    bool m_deleteDelistedData = false;
+    mutable std::recursive_mutex locker;
+    Semaphore maxConcurrentDownloadJobs{3};
+    bool deleteDelistedData = false;
+    MarketCategory marketCategory = MarketCategory::Futures;
 
-    static bool writeCSVCandlesToZorroT6File(const std::string& csvPath, const std::string& t6Path);
+    static bool writeCSVCandlesToZorroT6File(const std::string &csvPath, const std::string &t6Path);
 
-    static int64_t checkSymbolCSVFile(const std::string& path);
+    static int64_t checkSymbolCSVFile(const std::string &path);
 
-    static bool writeCandlesToCSVFile(const std::vector<okx::Candle>& candles, const std::string& path);
+    static bool writeCandlesToCSVFile(const std::vector<Candle> &candles, const std::string &path);
 
-    static bool readCandlesFromCSVFile(const std::string& path, std::vector<okx::Candle>& candles);
+    static bool readCandlesFromCSVFile(const std::string &path, std::vector<Candle> &candles);
 
-    void convertFromCSVToT6(const std::vector<std::filesystem::path>& filePaths, const std::string& outDirPath) const;
+    void convertFromCSVToT6(const std::vector<std::filesystem::path> &filePaths, const std::string &outDirPath) const;
 
-    static int64_t checkFundingRatesCSVFile(const std::string& path);
+    static int64_t checkFundingRatesCSVFile(const std::string &path);
 
-    static bool writeFundingRatesToCSVFile(const std::vector<okx::FundingRate>& fr, const std::string& path);
+    static bool writeFundingRatesToCSVFile(const std::vector<FundingRate> &fr, const std::string &path);
 
-    explicit P(const std::uint32_t maxJobs, const bool deleteDelistedData) : m_okxClient(std::make_unique<RESTClient>("", "", "")),
-                                              maxConcurrentConvertJobs(maxJobs),
-                                              m_deleteDelistedData(deleteDelistedData) {
+    explicit P(const std::uint32_t maxJobs, const bool deleteDelistedData) : okxClient(
+                                                                                 std::make_unique<RESTClient>(
+                                                                                     "", "", "")),
+                                                                             maxConcurrentConvertJobs(maxJobs),
+                                                                             deleteDelistedData(deleteDelistedData) {
     }
 };
 
-OKXDownloader::OKXDownloader(std::uint32_t maxJobs, bool deleteDelistedData) : m_p(std::make_unique<P>(maxJobs, deleteDelistedData)) {
+OKXDownloader::OKXDownloader(std::uint32_t maxJobs, const MarketCategory marketCategory, bool deleteDelistedData) : m_p(
+    std::make_unique<P>(maxJobs, deleteDelistedData)) {
+    m_p->marketCategory = marketCategory;
 }
 
 OKXDownloader::~OKXDownloader() = default;
 
-bool OKXDownloader::P::readCandlesFromCSVFile(const std::string& path, std::vector<okx::Candle>& candles) {
+bool OKXDownloader::P::readCandlesFromCSVFile(const std::string &path, std::vector<Candle> &candles) {
     try {
         io::CSVReader<6> in(path);
         in.read_header(io::ignore_extra_column, "open_time", "open", "high", "low", "close", "volume");
 
-        okx::Candle candle;
+        Candle candle;
         double o, h, l, c, vol = 0.0;
-        while (in.read_row(candle.m_ts, o, h, l, c, vol)) {
-            candle.m_o = o;
-            candle.m_h = h;
-            candle.m_l = l;
-            candle.m_c = c;
-            candle.m_vol = vol;
+        while (in.read_row(candle.ts, o, h, l, c, vol)) {
+            candle.o = o;
+            candle.h = h;
+            candle.l = l;
+            candle.c = c;
+            candle.vol = vol;
             candles.push_back(candle);
         }
-    }
-    catch (std::exception& e) {
+    } catch (std::exception &e) {
         spdlog::warn(fmt::format("Could not parse CSV asset file: {}, reason: {}", path, e.what()));
         return false;
     }
@@ -77,8 +81,8 @@ bool OKXDownloader::P::readCandlesFromCSVFile(const std::string& path, std::vect
     return true;
 }
 
-bool OKXDownloader::P::writeCSVCandlesToZorroT6File(const std::string& csvPath, const std::string& t6Path) {
-    std::filesystem::path pathToT6File{t6Path};
+bool OKXDownloader::P::writeCSVCandlesToZorroT6File(const std::string &csvPath, const std::string &t6Path) {
+    const std::filesystem::path pathToT6File{t6Path};
 
     std::ofstream ofs;
     ofs.open(pathToT6File.string(), std::ios::trunc | std::ios::binary);
@@ -88,36 +92,36 @@ bool OKXDownloader::P::writeCSVCandlesToZorroT6File(const std::string& csvPath, 
         return false;
     }
 
-    std::vector<okx::Candle> candles;
+    std::vector<Candle> candles;
     if (!readCandlesFromCSVFile(csvPath, candles)) {
         spdlog::error(fmt::format("Couldn't read candles from csv file: {}", csvPath));
         return false;
     }
 
-    auto numMsForInterval = okx::OKX::numberOfMsForBarSize(okx::BarSize::_1m) / 1000;
+    const auto numMsForInterval = OKX::numberOfMsForBarSize(BarSize::_1m) / 1000;
 
-    for (auto& candle : std::ranges::reverse_view(candles)) {
+    for (auto &candle: std::ranges::reverse_view(candles)) {
         T6 t6;
-        t6.fOpen = candle.m_o.convert_to<float>();
-        t6.fHigh = candle.m_h.convert_to<float>();
-        t6.fLow = candle.m_l.convert_to<float>();
-        t6.fClose = candle.m_c.convert_to<float>();
+        t6.fOpen = candle.o.convert_to<float>();
+        t6.fHigh = candle.h.convert_to<float>();
+        t6.fLow = candle.l.convert_to<float>();
+        t6.fClose = candle.c.convert_to<float>();
         t6.fVal = 0.0;
-        t6.fVol = candle.m_vol.convert_to<float>();
-        t6.time = convertTimeMs(candle.m_ts + numMsForInterval);
-        ofs.write(reinterpret_cast<char*>(&t6), sizeof(T6));
+        t6.fVol = candle.vol.convert_to<float>();
+        t6.time = convertTimeMs(candle.ts + numMsForInterval);
+        ofs.write(reinterpret_cast<char *>(&t6), sizeof(T6));
     }
 
     ofs.close();
     return true;
 }
 
-void OKXDownloader::P::convertFromCSVToT6(const std::vector<std::filesystem::path>& filePaths,
-                                          const std::string& outDirPath) const {
-    std::vector<std::future<std::pair<std::string, bool>>> futures;
-    std::vector<std::pair<std::string, bool>> readyFutures;
+void OKXDownloader::P::convertFromCSVToT6(const std::vector<std::filesystem::path> &filePaths,
+                                          const std::string &outDirPath) const {
+    std::vector<std::future<std::pair<std::string, bool> > > futures;
+    std::vector<std::pair<std::string, bool> > readyFutures;
 
-    for (const auto& path : filePaths) {
+    for (const auto &path: filePaths) {
         if (path.empty()) {
             continue;
         }
@@ -129,8 +133,8 @@ void OKXDownloader::P::convertFromCSVToT6(const std::vector<std::filesystem::pat
 
         futures.push_back(
             std::async(std::launch::async,
-                       [](const std::filesystem::path& csvPath, const std::filesystem::path& t6Path,
-                          Semaphore& maxJobs) -> std::pair<std::string, bool> {
+                       [](const std::filesystem::path &csvPath, const std::filesystem::path &t6Path,
+                          Semaphore &maxJobs) -> std::pair<std::string, bool> {
                            std::scoped_lock w(maxJobs);
                            std::pair<std::string, bool> retVal;
                            retVal.first = csvPath.filename().replace_extension("").string();
@@ -140,22 +144,20 @@ void OKXDownloader::P::convertFromCSVToT6(const std::vector<std::filesystem::pat
     }
 
     do {
-        for (auto& future : futures) {
+        for (auto &future: futures) {
             if (isReady(future)) {
                 readyFutures.push_back(future.get());
                 if (readyFutures.back().second) {
                     spdlog::info(fmt::format("Symbol: {} converted", readyFutures.back().first));
-                }
-                else {
+                } else {
                     spdlog::error(fmt::format("Symbol: {} conversion failed", readyFutures.back().first));
                 }
             }
         }
-    }
-    while (readyFutures.size() < futures.size());
+    } while (readyFutures.size() < futures.size());
 }
 
-bool OKXDownloader::P::writeCandlesToCSVFile(const std::vector<okx::Candle>& candles, const std::string& path) {
+bool OKXDownloader::P::writeCandlesToCSVFile(const std::vector<Candle> &candles, const std::string &path) {
     const std::filesystem::path pathToCSVFile{path};
 
     std::ofstream ofs;
@@ -170,31 +172,31 @@ bool OKXDownloader::P::writeCandlesToCSVFile(const std::vector<okx::Candle>& can
 
     try {
         fileSize = std::filesystem::file_size(pathToCSVFile.string());
-    }
-    catch (const std::filesystem::filesystem_error&) {
+    } catch (const std::filesystem::filesystem_error &) {
         fileSize = 0;
     }
 
     if (fileSize == 0) {
-        ofs << "open_time,open,high,low,close,volume"
-            << std::endl;
+        ofs << "open_time,open,high,low,close,volume,vol_ccy,vol_ccy_quote"<< std::endl;
     }
 
-    for (const auto& candle : candles) {
-        ofs << candle.m_ts << ",";
-        ofs << candle.m_o << ",";
-        ofs << candle.m_h << ",";
-        ofs << candle.m_l << ",";
-        ofs << candle.m_c << ",";
-        ofs << candle.m_vol << std::endl;
+    for (const auto &candle: candles) {
+        ofs << candle.ts << ",";
+        ofs << candle.o << ",";
+        ofs << candle.h << ",";
+        ofs << candle.l << ",";
+        ofs << candle.c << ",";
+        ofs << candle.vol << ",";
+        ofs << candle.volCcy << ",";
+        ofs << candle.volCcyQuote << std::endl;
     }
 
     ofs.close();
     return true;
 }
 
-int64_t OKXDownloader::P::checkSymbolCSVFile(const std::string& path) {
-    int64_t oldestBybitDate = 1420070400000; /// Thursday 1. January 2015 0:00:00
+int64_t OKXDownloader::P::checkSymbolCSVFile(const std::string &path) {
+    constexpr int64_t oldestBybitDate = 1420070400000; /// Thursday 1. January 2015 0:00:00
 
     std::ifstream ifs;
     ifs.open(path, std::ios::ate);
@@ -207,7 +209,7 @@ int64_t OKXDownloader::P::checkSymbolCSVFile(const std::string& path) {
     }
 
     /// Read last row
-    std::streampos size = ifs.tellg();
+    const std::streampos size = ifs.tellg();
     char c;
     std::string row;
     int endLines = 0;
@@ -221,7 +223,7 @@ int64_t OKXDownloader::P::checkSymbolCSVFile(const std::string& path) {
             if (endLines >= 1 && !row.empty()) {
                 std::ranges::reverse(row);
 
-                auto records = splitString(row, ',');
+                const auto records = splitString(row, ',');
 
                 if (records.size() != 6) {
                     spdlog::error(fmt::format("Wrong records number in the CSV file: {}", path));
@@ -231,8 +233,7 @@ int64_t OKXDownloader::P::checkSymbolCSVFile(const std::string& path) {
                 ifs.close();
                 return std::stoll(records[0]);
             }
-        }
-        else {
+        } else {
             row.push_back(c);
         }
     }
@@ -240,8 +241,8 @@ int64_t OKXDownloader::P::checkSymbolCSVFile(const std::string& path) {
     return oldestBybitDate;
 }
 
-int64_t OKXDownloader::P::checkFundingRatesCSVFile(const std::string& path) {
-    int64_t oldestDate = 1420070400000; /// Thursday 1. January 2015 0:00:00
+int64_t OKXDownloader::P::checkFundingRatesCSVFile(const std::string &path) {
+    constexpr int64_t oldestDate = 1420070400000; /// Thursday 1. January 2015 0:00:00
 
     std::ifstream ifs;
     ifs.open(path, std::ios::ate);
@@ -254,7 +255,7 @@ int64_t OKXDownloader::P::checkFundingRatesCSVFile(const std::string& path) {
     }
 
     /// Read last row
-    std::streampos size = ifs.tellg();
+    const std::streampos size = ifs.tellg();
     char c;
     std::string row;
     int endLines = 0;
@@ -268,7 +269,7 @@ int64_t OKXDownloader::P::checkFundingRatesCSVFile(const std::string& path) {
             if (endLines >= 1 && !row.empty()) {
                 std::ranges::reverse(row);
 
-                auto records = splitString(row, ',');
+                const auto records = splitString(row, ',');
 
                 if (records.size() != 2) {
                     spdlog::error(fmt::format("Wrong records number in the CSV file: {}", path));
@@ -278,8 +279,7 @@ int64_t OKXDownloader::P::checkFundingRatesCSVFile(const std::string& path) {
                 ifs.close();
                 return std::stoll(records[0]);
             }
-        }
-        else {
+        } else {
             row.push_back(c);
         }
     }
@@ -287,7 +287,7 @@ int64_t OKXDownloader::P::checkFundingRatesCSVFile(const std::string& path) {
     return oldestDate;
 }
 
-bool OKXDownloader::P::writeFundingRatesToCSVFile(const std::vector<okx::FundingRate>& fr, const std::string& path) {
+bool OKXDownloader::P::writeFundingRatesToCSVFile(const std::vector<FundingRate> &fr, const std::string &path) {
     const std::filesystem::path pathToCSVFile{path};
 
     std::ofstream ofs;
@@ -302,20 +302,19 @@ bool OKXDownloader::P::writeFundingRatesToCSVFile(const std::vector<okx::Funding
 
     try {
         fileSize = std::filesystem::file_size(pathToCSVFile.string());
-    }
-    catch (const std::filesystem::filesystem_error&) {
+    } catch (const std::filesystem::filesystem_error &) {
         fileSize = 0;
     }
 
 
     if (fileSize == 0) {
         ofs << "funding_time,funding_rate"
-            << std::endl;
+                << std::endl;
     }
 
-    for (const auto& record : fr) {
-        ofs << record.m_fundingTime << ",";
-        ofs << record.m_fundingRate << std::endl;
+    for (const auto &record: fr) {
+        ofs << record.fundingTime << ",";
+        ofs << record.fundingRate << std::endl;
     }
 
     ofs.close();
@@ -323,81 +322,97 @@ bool OKXDownloader::P::writeFundingRatesToCSVFile(const std::vector<okx::Funding
     return true;
 }
 
-void OKXDownloader::updateMarketData(const std::string& dirPath,
-                                     const std::vector<std::string>& symbols,
+void OKXDownloader::updateMarketData(const std::string &dirPath,
+                                     const std::vector<std::string> &symbols,
                                      CandleInterval candleInterval,
-                                     const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                                     const onSymbolCompleted& onSymbolCompletedCB,
+                                     const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                                     const onSymbolCompleted &onSymbolCompletedCB,
                                      const bool convertToT6) const {
-    auto okxBarSize = okx::BarSize::_1m;
+    auto okxBarSize = BarSize::_1m;
+
+
     const auto barSizeInMinutes = static_cast<std::underlying_type_t<CandleInterval>>(candleInterval) / 60;
 
-    if (const auto isOk = okx::OKX::isValidBarSize(barSizeInMinutes, okxBarSize); !isOk) {
+    if (const auto isOk = OKX::isValidBarSize(barSizeInMinutes, okxBarSize); !isOk) {
         throw std::invalid_argument("invalid OKX bar size: " + std::to_string(barSizeInMinutes) + " m");
     }
 
-    std::vector<std::future<std::filesystem::path>> futures;
+    std::vector<std::future<std::filesystem::path> > futures;
     const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
     std::vector<std::string> symbolsToDelete;
 
+    std::string csvDirName;
+    std::string t6DirName;
+    InstrumentType instrumentType;
+
+    switch (m_p->marketCategory) {
+        case MarketCategory::Spot:
+            instrumentType = InstrumentType::SPOT;
+            csvDirName = CSV_SPOT_DIR;
+            t6DirName = T6_SPOT_DIR;
+            break;
+        case MarketCategory::Futures:
+            instrumentType = InstrumentType::SWAP;
+            csvDirName = CSV_FUT_DIR;
+            t6DirName = T6_FUT_DIR;
+            break;
+    }
+
     spdlog::info(fmt::format("Symbols directory: {}", finalPath.string()));
 
     if (symbolsToUpdate.empty()) {
         spdlog::info(fmt::format("Updating all symbols"));
-    }
-    else {
+    } else {
         spdlog::info(fmt::format("Updating symbols: {}", fmt::join(symbols, ", ")));
     }
 
-    const auto exchangeInstruments = m_p->m_okxClient->getInstruments(okx::InstrumentType::SWAP);
+    const auto exchangeInstruments = m_p->okxClient->getInstruments(instrumentType);
 
     if (symbolsToUpdate.empty()) {
-        for (const auto& el : exchangeInstruments) {
-            if (el.m_settleCcy == "USDT") {
-                if (el.m_state == okx::InstrumentStatus::live) {
-                    symbolsToUpdate.push_back(el.m_instId);
+        for (const auto &el: exchangeInstruments) {
+            if (el.settleCcy == "USDT" || el.quoteCcy == "USD") {
+                if (el.state == InstrumentStatus::live) {
+                    symbolsToUpdate.push_back(el.instId);
                 } else {
-                    symbolsToDelete.push_back(el.m_instId);
+                    symbolsToDelete.push_back(el.instId);
                 }
             }
         }
-    }else {
+    } else {
         std::vector<std::string> tempSymbols;
 
-        for (const auto &symbol : symbolsToUpdate) {
-            auto it = std::ranges::find_if(exchangeInstruments,[symbol](const okx::Instrument &i) {
-                return i.m_instId == symbol;
+        for (const auto &symbol: symbolsToUpdate) {
+            auto it = std::ranges::find_if(exchangeInstruments, [symbol](const Instrument &i) {
+                return i.instId == symbol;
             });
 
-            if (it == exchangeInstruments.end() || it->m_state != okx::InstrumentStatus::live) {
+            if (it == exchangeInstruments.end() || it->state != InstrumentStatus::live) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", symbol));
             } else {
-                tempSymbols.push_back(it->m_instId);
+                tempSymbols.push_back(it->instId);
             }
         }
 
         symbolsToUpdate = tempSymbols;
     }
 
-    for (const auto& s : symbolsToUpdate) {
+    for (const auto &s: symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [finalPath, this, &okxBarSize, &barSizeInMinutes, convertToT6](const std::string& symbol,
-                                                                          Semaphore& maxJobs) -> std::filesystem::path {
+                       [finalPath, this, &okxBarSize, &barSizeInMinutes, &csvDirName, &t6DirName, convertToT6](const std::string &symbol,
+                   Semaphore &maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
                            std::filesystem::path symbolFilePathCsv = finalPath;
                            std::filesystem::path symbolFilePathT6 = finalPath;
 
-                           symbolFilePathCsv.append(CSV_FUT_DIR);
-                           symbolFilePathT6.append(T6_FUT_DIR);
+                           symbolFilePathCsv.append(csvDirName);
+                           symbolFilePathT6.append(t6DirName);
 
                            symbolFilePathCsv.append(Downloader::minutesToString(barSizeInMinutes));
-                           symbolFilePathT6.append(Downloader::minutesToString(barSizeInMinutes));
-
-                           {
+                           symbolFilePathT6.append(Downloader::minutesToString(barSizeInMinutes)); {
                                if (const auto err = createDirectoryRecursively(symbolFilePathCsv.string())) {
                                    throw std::runtime_error(fmt::format("Failed to create {}, err: {}",
                                                                         symbolFilePathCsv.string(),
@@ -423,16 +438,17 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
                            const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
 
                            try {
-                               const auto candles = m_p->m_okxClient->getHistoricalPrices(symbol,
+                               const auto candles = m_p->okxClient->getHistoricalPrices(symbol,
                                    okxBarSize,
                                    fromTimeStamp,
-                                   nowTimestamp);
+                                   nowTimestamp, 100, [symbolFilePathCsv, symbol](const std::vector<Candle> &cnd) {
+                                       if (!cnd.empty()) {
+                                           if (!P::writeCandlesToCSVFile(cnd, symbolFilePathCsv.string())) {
+                                               spdlog::warn(fmt::format("CSV file for symbol: {} update failed", symbol));
+                                           }
+                                       }
+                                   });
 
-                               if (!candles.empty()) {
-                                   if (P::writeCandlesToCSVFile(candles, symbolFilePathCsv.string())) {
-                                       spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
-                                   }
-                               }
                                // Return the path if the CSV file exists (for T6 conversion)
                                if (std::filesystem::exists(symbolFilePathCsv)) {
                                    return symbolFilePathCsv;
@@ -442,38 +458,38 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
                                                         symbol, e.what()));
                            }
                            return "";
-                       }, s, std::ref(m_p->m_maxConcurrentDownloadJobs)));
+                       }, s, std::ref(m_p->maxConcurrentDownloadJobs)));
     }
 
     do {
-        for (auto& future : futures) {
+        for (auto &future: futures) {
             if (isReady(future)) {
                 csvFilePaths.push_back(future.get());
             }
         }
-    }
-    while (csvFilePaths.size() < futures.size());
+    } while (csvFilePaths.size() < futures.size());
 
     std::filesystem::path T6Directory = finalPath;
 
-    T6Directory.append(T6_FUT_DIR);
+    T6Directory.append(t6DirName);
     T6Directory.append(Downloader::minutesToString(barSizeInMinutes));
 
     if (convertToT6 && !csvFilePaths.empty()) {
         if (const auto err = createDirectoryRecursively(T6Directory.string())) {
-            throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(), err.message().c_str()));
+            throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(),
+                                                 err.message().c_str()));
         }
         spdlog::info(fmt::format("Converting from csv to t6..."));
         m_p->convertFromCSVToT6(csvFilePaths, T6Directory.string());
     }
 
-    if (m_p->m_deleteDelistedData) {
-        for (const auto& symbol : symbolsToDelete) {
+    if (m_p->deleteDelistedData) {
+        for (const auto &symbol: symbolsToDelete) {
             std::filesystem::path symbolFilePathCsv = finalPath;
             std::filesystem::path symbolFilePathT6 = finalPath;
 
-            symbolFilePathCsv.append(CSV_FUT_DIR);
-            symbolFilePathT6.append(T6_FUT_DIR);
+            symbolFilePathCsv.append(csvDirName);
+            symbolFilePathT6.append(t6DirName);
 
             symbolFilePathCsv.append(Downloader::minutesToString(barSizeInMinutes));
             symbolFilePathT6.append(Downloader::minutesToString(barSizeInMinutes));
@@ -486,28 +502,30 @@ void OKXDownloader::updateMarketData(const std::string& dirPath,
 
             if (std::filesystem::exists(symbolFilePathCsv)) {
                 std::filesystem::remove(symbolFilePathCsv);
-                spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol, symbolFilePathCsv.string());
+                spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol,
+                             symbolFilePathCsv.string());
             }
 
             if (std::filesystem::exists(symbolFilePathT6)) {
                 std::filesystem::remove(symbolFilePathT6);
-                spdlog::info("Removing t6 file for delisted symbol: {}, file: {}...", symbol, symbolFilePathT6.string());
+                spdlog::info("Removing t6 file for delisted symbol: {}, file: {}...", symbol,
+                             symbolFilePathT6.string());
             }
         }
     }
 }
 
-void OKXDownloader::updateMarketData(const std::string& connectionString,
-                                     const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                                     const onSymbolCompleted& onSymbolCompletedCB) const {
+void OKXDownloader::updateMarketData(const std::string &connectionString,
+                                     const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                                     const onSymbolCompleted &onSymbolCompletedCB) const {
     throw std::runtime_error("Unimplemented: OKXDownloader::updateMarketData");
 }
 
-void OKXDownloader::updateFundingRateData(const std::string& dirPath,
-                                 const std::vector<std::string>& symbols,
-                                 const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                                 const onSymbolCompleted& onSymbolCompletedCB) const {
-    std::vector<std::future<std::filesystem::path>> futures;
+void OKXDownloader::updateFundingRateData(const std::string &dirPath,
+                                          const std::vector<std::string> &symbols,
+                                          const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                                          const onSymbolCompleted &onSymbolCompletedCB) const {
+    std::vector<std::future<std::filesystem::path> > futures;
     const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
@@ -517,20 +535,19 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
 
     if (symbolsToUpdate.empty()) {
         spdlog::info(fmt::format("Updating all symbols"));
-    }
-    else {
+    } else {
         spdlog::info(fmt::format("Updating symbols: {}", fmt::join(symbols, ", ")));
     }
 
-    const auto exchangeInstruments = m_p->m_okxClient->getInstruments(okx::InstrumentType::SWAP);
+    const auto exchangeInstruments = m_p->okxClient->getInstruments(InstrumentType::SWAP);
 
     if (symbolsToUpdate.empty()) {
-        for (const auto& el : exchangeInstruments) {
-            if (el.m_settleCcy == "USDT") {
-                if (el.m_state == okx::InstrumentStatus::live) {
-                    symbolsToUpdate.push_back(el.m_instId);
+        for (const auto &el: exchangeInstruments) {
+            if (el.settleCcy == "USDT") {
+                if (el.state == InstrumentStatus::live) {
+                    symbolsToUpdate.push_back(el.instId);
                 } else {
-                    symbolsToDelete.push_back(el.m_instId);
+                    symbolsToDelete.push_back(el.instId);
                 }
             }
         }
@@ -538,33 +555,34 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
         std::vector<std::string> tempSymbols;
 
         for (const auto &symbol: symbolsToUpdate) {
-            auto it = std::ranges::find_if(exchangeInstruments, [symbol](const okx::Instrument &i) {
-                return i.m_instId == symbol;
+            auto it = std::ranges::find_if(exchangeInstruments, [symbol](const Instrument &i) {
+                return i.instId == symbol;
             });
 
-            if (it == exchangeInstruments.end() || it->m_state != okx::InstrumentStatus::live) {
+            if (it == exchangeInstruments.end() || it->state != InstrumentStatus::live) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format(
                     "Symbol: {} not found on Exchange, probably delisted", symbol));
             } else {
-                tempSymbols.push_back(it->m_instId);
+                tempSymbols.push_back(it->instId);
             }
         }
 
         symbolsToUpdate = tempSymbols;
     }
 
-    for (const auto& s : symbolsToUpdate) {
+    for (const auto &s: symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [finalPath, this](const std::string& symbol,
-                                          Semaphore& maxJobs) -> std::filesystem::path {
+                       [finalPath, this](const std::string &symbol,
+                                         Semaphore &maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
                            std::filesystem::path symbolFilePathCsv = finalPath;
 
 
                            symbolFilePathCsv.append(CSV_FUT_FR_DIR);
-                           if (const auto err = createDirectoryRecursively(symbolFilePathCsv.string()); err.value() !=0) {
+                           if (const auto err = createDirectoryRecursively(symbolFilePathCsv.string());
+                               err.value() != 0) {
                                throw std::runtime_error(fmt::format("Failed to create directory: {}, error: {}",
                                                                     symbolFilePathCsv.string(), err.value()));
                            }
@@ -577,13 +595,13 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
 
                            const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
 
-                           const auto fr = m_p->m_okxClient->getFundingRates(symbol, fromTimeStamp, nowTimestamp,
+                           const auto fr = m_p->okxClient->getFundingRates(symbol, fromTimeStamp, nowTimestamp,
                                                                              1000);
 
                            try {
                                if (!fr.empty()) {
                                    if (fr.size() == 1) {
-                                       if (fromTimeStamp == fr.front().m_fundingTime) {
+                                       if (fromTimeStamp == fr.front().fundingTime) {
                                            spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
                                            return symbolFilePathCsv;
                                        }
@@ -599,20 +617,19 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
                                                         symbol, e.what()));
                            }
                            return "";
-                       }, s, std::ref(m_p->m_maxConcurrentDownloadJobs)));
+                       }, s, std::ref(m_p->maxConcurrentDownloadJobs)));
     }
 
     do {
-        for (auto& future : futures) {
+        for (auto &future: futures) {
             if (isReady(future)) {
                 csvFilePaths.push_back(future.get());
             }
         }
-    }
-    while (csvFilePaths.size() < futures.size());
+    } while (csvFilePaths.size() < futures.size());
 
-    if (m_p->m_deleteDelistedData) {
-        for (const auto& symbol : symbolsToDelete) {
+    if (m_p->deleteDelistedData) {
+        for (const auto &symbol: symbolsToDelete) {
             std::filesystem::path symbolFilePathCsv = finalPath;
             symbolFilePathCsv.append(CSV_FUT_DIR);
             symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
@@ -620,7 +637,8 @@ void OKXDownloader::updateFundingRateData(const std::string& dirPath,
 
             if (std::filesystem::exists(symbolFilePathCsv)) {
                 std::filesystem::remove(symbolFilePathCsv);
-                spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol, symbolFilePathCsv.string());
+                spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol,
+                             symbolFilePathCsv.string());
             }
         }
     }

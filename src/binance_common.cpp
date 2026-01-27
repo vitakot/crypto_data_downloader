@@ -7,6 +7,9 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 */
 
 #include "vk/binance/binance_common.h"
+#include "vk/binance/binance_models.h"
+#include "vk/utils/utils.h"
+#include "vk/utils/semaphore.h"
 #include <filesystem>
 #include <fstream>
 #include <spdlog/spdlog.h>
@@ -14,31 +17,23 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <regex>
 #include <future>
 #include "csv.h"
-#include "vk/binance/binance_models.h"
-#include "vk/utils/utils.h"
-#include "vk/utils/semaphore.h"
-
-#include "vk/utils/magic_enum_wrapper.hpp"
 
 namespace vk::binance {
-
 struct BinanceCommon::P {
+    mutable Semaphore maxConcurrentConvertJobs;
+    Semaphore maxConcurrentDownloadJobs{3};
 
-    mutable Semaphore m_maxConcurrentConvertJobs;
-    Semaphore m_maxConcurrentDownloadJobs{3};
-
-    explicit P(const std::uint32_t maxJobs) : m_maxConcurrentConvertJobs(maxJobs) {
+    explicit P(const std::uint32_t maxJobs) : maxConcurrentConvertJobs(maxJobs) {
     }
 };
 
 BinanceCommon::BinanceCommon(std::uint32_t maxJobs) : m_p(std::make_unique<P>(maxJobs)) {
-
 }
 
 BinanceCommon::~BinanceCommon() = default;
 
 bool BinanceCommon::writeCSVCandlesToZorroT6File(const std::string &csvPath, const std::string &t6Path) {
-    std::filesystem::path pathToT6File{t6Path};
+    const std::filesystem::path pathToT6File{t6Path};
 
     std::ofstream ofs;
     ofs.open(pathToT6File.string(), std::ios::trunc | std::ios::binary);
@@ -54,7 +49,7 @@ bool BinanceCommon::writeCSVCandlesToZorroT6File(const std::string &csvPath, con
         return false;
     }
 
-    for (auto &candle: std::ranges::reverse_view(candles)) {
+    for (const auto &candle: std::ranges::reverse_view(candles)) {
         T6 t6;
         t6.fOpen = static_cast<float>(candle.m_open);
         t6.fHigh = static_cast<float>(candle.m_high);
@@ -80,8 +75,7 @@ bool BinanceCommon::readCandlesFromCSVFile(const std::string &path, std::vector<
                            candle.m_volume, candle.m_openTime)) {
             candles.push_back(candle);
         }
-    }
-    catch (std::exception &e) {
+    } catch (std::exception &e) {
         spdlog::warn(fmt::format("Could not parse CSV asset file: {}, reason: {}", path, e.what()));
         return false;
     }
@@ -104,14 +98,13 @@ bool BinanceCommon::writeCandlesToCSVFile(const std::vector<Candle> &candles, co
 
     try {
         fileSize = std::filesystem::file_size(pathToCSVFile.string());
-    }
-    catch (const std::filesystem::filesystem_error &) {
+    } catch (const std::filesystem::filesystem_error &) {
         fileSize = 0;
     }
 
     if (fileSize == 0) {
         ofs << "close_time,open,high,low,close,volume,timestamp,quote_av,trades,tb_base_av,tb_quote_av,ignore"
-            << std::endl;
+                << std::endl;
     }
 
     for (const auto &candle: candles) {
@@ -134,7 +127,7 @@ bool BinanceCommon::writeCandlesToCSVFile(const std::vector<Candle> &candles, co
 }
 
 int64_t BinanceCommon::checkSymbolCSVFile(const std::string &path) {
-    int64_t oldestBNBDate = 1420070400000; /// Thursday 1. January 2015 0:00:00
+    constexpr int64_t oldestBNBDate = 1420070400000; /// Thursday 1. January 2015 0:00:00
 
     std::ifstream ifs;
     ifs.open(path, std::ios::ate);
@@ -147,7 +140,7 @@ int64_t BinanceCommon::checkSymbolCSVFile(const std::string &path) {
     }
 
     /// Read last row
-    std::streampos size = ifs.tellg();
+    const std::streampos size = ifs.tellg();
     char c;
     std::string row;
     int endLines = 0;
@@ -161,7 +154,7 @@ int64_t BinanceCommon::checkSymbolCSVFile(const std::string &path) {
             if (endLines >= 1 && !row.empty()) {
                 std::ranges::reverse(row);
 
-                auto records = splitString(row, ',');
+                const auto records = splitString(row, ',');
 
                 if (records.size() != 12) {
                     spdlog::error(fmt::format("Wrong records number in the CSV file: {}", path));
@@ -181,8 +174,8 @@ int64_t BinanceCommon::checkSymbolCSVFile(const std::string &path) {
 
 void BinanceCommon::convertFromCSVToT6(const std::vector<std::filesystem::path> &filePaths,
                                        const std::string &outDirPath) const {
-    std::vector<std::future<std::pair<std::string, bool>>> futures;
-    std::vector<std::pair<std::string, bool>> readyFutures;
+    std::vector<std::future<std::pair<std::string, bool> > > futures;
+    std::vector<std::pair<std::string, bool> > readyFutures;
 
     for (const auto &path: filePaths) {
         if (path.empty()) {
@@ -195,15 +188,15 @@ void BinanceCommon::convertFromCSVToT6(const std::vector<std::filesystem::path> 
         spdlog::info(fmt::format("Converting symbol: {}...", path.filename().replace_extension("").string()));
 
         futures.push_back(
-                std::async(std::launch::async,
-                           [](const std::filesystem::path &csvPath, const std::filesystem::path &t6Path,
-                              Semaphore &maxJobs) -> std::pair<std::string, bool> {
-                               std::scoped_lock w(maxJobs);
-                               std::pair<std::string, bool> retVal;
-                               retVal.first = csvPath.filename().replace_extension("").string();
-                               retVal.second = writeCSVCandlesToZorroT6File(csvPath.string(), t6Path.string());
-                               return retVal;
-                           }, path, t6FilePath, std::ref(m_p->m_maxConcurrentConvertJobs)));
+            std::async(std::launch::async,
+                       [](const std::filesystem::path &csvPath, const std::filesystem::path &t6Path,
+                          Semaphore &maxJobs) -> std::pair<std::string, bool> {
+                           std::scoped_lock w(maxJobs);
+                           std::pair<std::string, bool> retVal;
+                           retVal.first = csvPath.filename().replace_extension("").string();
+                           retVal.second = writeCSVCandlesToZorroT6File(csvPath.string(), t6Path.string());
+                           return retVal;
+                       }, path, t6FilePath, std::ref(m_p->maxConcurrentConvertJobs)));
     }
 
     do {

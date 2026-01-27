@@ -20,25 +20,25 @@ class OKXDownloader final : public IExchangeDownloader {
     std::unique_ptr<P> m_p{};
 
 public:
-    explicit OKXDownloader(std::uint32_t maxJobs, bool deleteDelistedData = false);
+    explicit OKXDownloader(std::uint32_t maxJobs, MarketCategory marketCategory, bool deleteDelistedData = false);
 
     ~OKXDownloader() override;
 
-    void updateMarketData(const std::string& dirPath,
-                          const std::vector<std::string>& symbols,
+    void updateMarketData(const std::string &dirPath,
+                          const std::vector<std::string> &symbols,
                           CandleInterval candleInterval,
-                          const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                          const onSymbolCompleted& onSymbolCompletedCB,
-                          bool convertToT6 = false) const override;
+                          const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                          const onSymbolCompleted &onSymbolCompletedCB,
+                          bool convertToT6) const override;
 
-    void updateMarketData(const std::string& connectionString,
-                          const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                          const onSymbolCompleted& onSymbolCompletedCB) const override;
+    void updateMarketData(const std::string &connectionString,
+                          const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                          const onSymbolCompleted &onSymbolCompletedCB) const override;
 
-    void updateFundingRateData(const std::string& dirPath,
-                               const std::vector<std::string>& symbols,
-                               const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                               const onSymbolCompleted& onSymbolCompletedCB) const override;
+    void updateFundingRateData(const std::string &dirPath,
+                               const std::vector<std::string> &symbols,
+                               const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                               const onSymbolCompleted &onSymbolCompletedCB) const override;
 };
 }
 
