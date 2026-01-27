@@ -24,21 +24,21 @@ public:
 
     ~BinanceSpotDownloader() override;
 
-    void updateMarketData(const std::string& dirPath,
-                          const std::vector<std::string>& symbols,
+    void updateMarketData(const std::string &dirPath,
+                          const std::vector<std::string> &symbols,
                           CandleInterval candleInterval,
-                          const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                          const onSymbolCompleted& onSymbolCompletedCB,
-                          bool convertToT6 = false) const override;
+                          const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                          const onSymbolCompleted &onSymbolCompletedCB,
+                          bool convertToT6) const override;
 
-    void updateMarketData(const std::string& connectionString,
-                          const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                          const onSymbolCompleted& onSymbolCompletedCB) const override;
+    void updateMarketData(const std::string &connectionString,
+                          const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                          const onSymbolCompleted &onSymbolCompletedCB) const override;
 
-    void updateFundingRateData(const std::string& dirPath,
-                               const std::vector<std::string>& symbols,
-                               const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                               const onSymbolCompleted& onSymbolCompletedCB) const override;
+    void updateFundingRateData(const std::string &dirPath,
+                               const std::vector<std::string> &symbols,
+                               const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                               const onSymbolCompleted &onSymbolCompletedCB) const override;
 };
 }
 

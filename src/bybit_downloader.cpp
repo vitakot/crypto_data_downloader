@@ -25,12 +25,12 @@ using namespace vk::bybit;
 
 namespace vk {
 struct BybitDownloader::P {
-    std::unique_ptr<RESTClient> m_bybitClient;
+    std::unique_ptr<RESTClient> bybitClient;
     mutable Semaphore maxConcurrentConvertJobs;
-    mutable std::recursive_mutex m_locker;
-    Semaphore m_maxConcurrentDownloadJobs{2};
-    MarketCategory m_marketCategory = MarketCategory::Futures;
-    bool m_deleteDelistedData = false;
+    mutable std::recursive_mutex locker;
+    Semaphore maxConcurrentDownloadJobs{2};
+    MarketCategory marketCategory = MarketCategory::Futures;
+    bool deleteDelistedData = false;
 
     static bool writeCSVCandlesToZorroT6File(const std::string &csvPath, const std::string &t6Path);
 
@@ -46,15 +46,15 @@ struct BybitDownloader::P {
 
     static bool writeFundingRatesToCSVFile(const std::vector<FundingRate> &fr, const std::string &path);
 
-    explicit P(const std::uint32_t maxJobs, const bool deleteDelistedData) : m_bybitClient(std::make_unique<RESTClient>("", "")),
+    explicit P(const std::uint32_t maxJobs, const bool deleteDelistedData) : bybitClient(std::make_unique<RESTClient>("", "")),
                                               maxConcurrentConvertJobs(maxJobs),
-                                              m_deleteDelistedData(deleteDelistedData) {
+                                              deleteDelistedData(deleteDelistedData) {
     }
 };
 
 BybitDownloader::BybitDownloader(std::uint32_t maxJobs, const MarketCategory marketCategory, bool deleteDelistedData) : m_p(
     std::make_unique<P>(maxJobs, deleteDelistedData)) {
-    m_p->m_marketCategory = marketCategory;
+    m_p->marketCategory = marketCategory;
 }
 
 BybitDownloader::~BybitDownloader() = default;
@@ -328,7 +328,7 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
     std::string t6DirName;
     std::vector<std::string> symbolsToDelete;
 
-    switch (m_p->m_marketCategory) {
+    switch (m_p->marketCategory) {
         case MarketCategory::Spot:
             category = Category::spot;
             csvDirName = CSV_SPOT_DIR;
@@ -360,7 +360,7 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
         spdlog::info(fmt::format("Updating symbols: {}", fmt::join(symbols, ", ")));
     }
 
-    std::vector<Instrument> exchangeSymbols = m_p->m_bybitClient->getInstrumentsInfo(category);
+    std::vector<Instrument> exchangeSymbols = m_p->bybitClient->getInstrumentsInfo(category);
 
     if (symbolsToUpdate.empty()) {
         for (const auto &el: exchangeSymbols) {
@@ -441,7 +441,7 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
 
                            try {
                                /// Add 1000 ms to fromTimeStamp so that we start with the next candle (1ms - 999ms does not work)
-                               const auto candles = m_p->m_bybitClient->getHistoricalPrices(category,
+                               const auto candles = m_p->bybitClient->getHistoricalPrices(category,
                                    symbol,
                                    bybitCandleInterval,
                                    fromTimeStamp + 1000,
@@ -459,7 +459,7 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
                                                         symbol, e.what()));
                            }
                            return "";
-                       }, s, std::ref(m_p->m_maxConcurrentDownloadJobs)));
+                       }, s, std::ref(m_p->maxConcurrentDownloadJobs)));
     }
 
     do {
@@ -483,7 +483,7 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
         m_p->convertFromCSVToT6(csvFilePaths, T6Directory.string());
     }
 
-    if (m_p->m_deleteDelistedData) {
+    if (m_p->deleteDelistedData) {
         for (const auto &symbol: symbolsToDelete) {
             std::filesystem::path symbolFilePathCsv = finalPath;
             std::filesystem::path symbolFilePathT6 = finalPath;
@@ -537,7 +537,7 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
         spdlog::info(fmt::format("Updating symbols: {}", fmt::join(symbols, ", ")));
     }
 
-    const auto instrumentsInfo = m_p->m_bybitClient->getInstrumentsInfo(Category::linear);
+    const auto instrumentsInfo = m_p->bybitClient->getInstrumentsInfo(Category::linear);
 
     if (symbolsToUpdate.empty()) {
         constexpr auto symbolContract = ContractType::LinearPerpetual;
@@ -597,7 +597,7 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
                            const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
 
                            try {
-                               if (const auto fr = m_p->m_bybitClient->getFundingRates(
+                               if (const auto fr = m_p->bybitClient->getFundingRates(
                                    Category::linear, symbol, fromTimeStamp + 1000, nowTimestamp); !fr.empty()) {
                                    if (fr.size() == 1) {
                                        if (fromTimeStamp == fr.front().m_fundingRateTimestamp) {
@@ -616,7 +616,7 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
                                                         symbol, e.what()));
                            }
                            return "";
-                       }, s, std::ref(m_p->m_maxConcurrentDownloadJobs)));
+                       }, s, std::ref(m_p->maxConcurrentDownloadJobs)));
     }
 
     do {
@@ -627,7 +627,7 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
         }
     } while (csvFilePaths.size() < futures.size());
 
-    if (m_p->m_deleteDelistedData) {
+    if (m_p->deleteDelistedData) {
         for (const auto &symbol: symbolsToDelete) {
             std::filesystem::path symbolFilePathCsv = finalPath;
             symbolFilePathCsv.append(CSV_FUT_DIR);

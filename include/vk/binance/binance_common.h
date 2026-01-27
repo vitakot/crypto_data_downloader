@@ -9,15 +9,13 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #ifndef INCLUDE_VK_BINANCE_COMMON_H
 #define INCLUDE_VK_BINANCE_COMMON_H
 
+#include "vk/binance/binance_models.h"
 #include <memory>
 #include <string>
 #include <vector>
-#include "vk/binance/binance_models.h"
 
 namespace vk::binance {
-
 class BinanceCommon {
-
     struct P;
     std::unique_ptr<P> m_p{};
 

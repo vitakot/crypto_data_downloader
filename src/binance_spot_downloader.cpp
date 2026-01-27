@@ -24,30 +24,34 @@ using namespace vk::binance;
 
 namespace vk {
 struct BinanceSpotDownloader::P {
-    std::unique_ptr<spot::RESTClient> m_bnbSpotClient;
-    std::unique_ptr<BinanceCommon> m_binanceCommon;
-    mutable Semaphore m_maxConcurrentConvertJobs;
-    Semaphore m_maxConcurrentDownloadJobs{3};
-    bool m_deleteDelistedData = false;
+    std::unique_ptr<spot::RESTClient> bnbSpotClient;
+    std::unique_ptr<BinanceCommon> binanceCommon;
+    mutable Semaphore maxConcurrentConvertJobs;
+    Semaphore maxConcurrentDownloadJobs{3};
+    bool deleteDelistedData = false;
 
-    explicit P(const std::uint32_t maxJobs, const bool deleteDelistedData) : m_bnbSpotClient(std::make_unique<spot::RESTClient>("", "")),
-                                              m_binanceCommon(std::make_unique<BinanceCommon>(maxJobs)),
-                                              m_maxConcurrentConvertJobs(maxJobs),
-                                              m_deleteDelistedData(deleteDelistedData) {
+    explicit P(const std::uint32_t maxJobs, const bool deleteDelistedData) : bnbSpotClient(
+                                                                                 std::make_unique<spot::RESTClient>(
+                                                                                     "", "")),
+                                                                             binanceCommon(
+                                                                                 std::make_unique<BinanceCommon>(
+                                                                                     maxJobs)),
+                                                                             maxConcurrentConvertJobs(maxJobs),
+                                                                             deleteDelistedData(deleteDelistedData) {
     }
 };
 
-BinanceSpotDownloader::BinanceSpotDownloader(std::uint32_t maxJobs, bool deleteDelistedData) : m_p(std::make_unique<P>(maxJobs, deleteDelistedData)) {
-
+BinanceSpotDownloader::BinanceSpotDownloader(std::uint32_t maxJobs, bool deleteDelistedData) : m_p(
+    std::make_unique<P>(maxJobs, deleteDelistedData)) {
 }
 
 BinanceSpotDownloader::~BinanceSpotDownloader() = default;
 
-void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const std::vector<std::string>& symbols,
-                                                          CandleInterval candleInterval,
-                                                          const onSymbolsToUpdate& onSymbolsToUpdateCB,
-                                                          const onSymbolCompleted& onSymbolCompletedCB,
-                                                          const bool convertToT6) const {
+void BinanceSpotDownloader::updateMarketData(const std::string &dirPath, const std::vector<std::string> &symbols,
+                                             CandleInterval candleInterval,
+                                             const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                                             const onSymbolCompleted &onSymbolCompletedCB,
+                                             const bool convertToT6) const {
     auto bnbCandleInterval = binance::CandleInterval::_1m;
     const auto barSizeInMinutes = static_cast<std::underlying_type_t<CandleInterval>>(candleInterval) / 60;
 
@@ -55,7 +59,7 @@ void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const s
         throw std::invalid_argument("invalid Binance candle resolution: " + std::to_string(barSizeInMinutes) + " m");
     }
 
-    std::vector<std::future<std::filesystem::path>> futures;
+    std::vector<std::future<std::filesystem::path> > futures;
     const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
@@ -65,23 +69,22 @@ void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const s
 
     if (symbolsToUpdate.empty()) {
         spdlog::info(fmt::format("Updating all symbols"));
-    }
-    else {
+    } else {
         spdlog::info(fmt::format("Updating symbols: {}", fmt::join(symbols, ", ")));
     }
 
-    const auto exchangeInfo = m_p->m_bnbSpotClient->getExchangeInfo();
+    const auto exchangeInfo = m_p->bnbSpotClient->getExchangeInfo();
 
-    for (const auto& limit : exchangeInfo.m_rateLimits) {
+    for (const auto &limit: exchangeInfo.m_rateLimits) {
         if (limit.m_rateLimitType == RateLimitType::REQUEST_WEIGHT && limit.m_intervalNum == 1 &&
             limit.m_interval == RateLimitInterval::MINUTE) {
             spdlog::info(fmt::format("Weight limit: {}", limit.m_limit));
-            m_p->m_bnbSpotClient->setAPIWeightLimit(limit.m_limit);
+            m_p->bnbSpotClient->setAPIWeightLimit(limit.m_limit);
         }
     }
 
     if (symbolsToUpdate.empty()) {
-        for (const auto& el : exchangeInfo.m_symbols) {
+        for (const auto &el: exchangeInfo.m_symbols) {
             if (el.m_status == ContractStatus::TRADING && el.m_quoteAsset == "USDT") {
                 symbolsToUpdate.push_back(el.m_symbol);
             }
@@ -106,12 +109,12 @@ void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const s
         symbolsToUpdate = tempSymbols;
     }
 
-    for (const auto& s : symbolsToUpdate) {
+    for (const auto &s: symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [finalPath, this, &bnbCandleInterval, &barSizeInMinutes, convertToT6](const std::string& symbol,
-                       Semaphore& maxJobs) ->
-                       std::filesystem::path {
+                       [finalPath, this, &bnbCandleInterval, &barSizeInMinutes, convertToT6](const std::string &symbol,
+                   Semaphore &maxJobs) ->
+                   std::filesystem::path {
                            std::scoped_lock w(maxJobs);
                            std::filesystem::path symbolFilePathCsv = finalPath;
                            std::filesystem::path symbolFilePathT6 = finalPath;
@@ -120,17 +123,19 @@ void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const s
                            symbolFilePathT6.append(T6_SPOT_DIR);
 
                            symbolFilePathCsv.append(Downloader::minutesToString(barSizeInMinutes));
-                           symbolFilePathT6.append(Downloader::minutesToString(barSizeInMinutes));
-
-                           {
+                           symbolFilePathT6.append(Downloader::minutesToString(barSizeInMinutes)); {
                                if (const auto err = createDirectoryRecursively(symbolFilePathCsv.string())) {
-                                   throw std::runtime_error(fmt::format("Failed to create {}, err: {}", symbolFilePathCsv.string(),err.message().c_str()));
+                                   throw std::runtime_error(fmt::format("Failed to create {}, err: {}",
+                                                                        symbolFilePathCsv.string(),
+                                                                        err.message().c_str()));
                                }
                            }
 
                            if (convertToT6) {
                                if (const auto err = createDirectoryRecursively(symbolFilePathT6.string())) {
-                                   throw std::runtime_error(fmt::format("Failed to create {}, err: {}", symbolFilePathCsv.string(),err.message().c_str()));
+                                   throw std::runtime_error(fmt::format("Failed to create {}, err: {}",
+                                                                        symbolFilePathCsv.string(),
+                                                                        err.message().c_str()));
                                }
                            }
 
@@ -147,7 +152,7 @@ void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const s
                            const int64_t fromTimeStamp = BinanceCommon::checkSymbolCSVFile(symbolFilePathCsv.string());
 
                            try {
-                               const auto candles = m_p->m_bnbSpotClient->getHistoricalPrices(symbol,
+                               const auto candles = m_p->bnbSpotClient->getHistoricalPrices(symbol,
                                    bnbCandleInterval,
                                    fromTimeStamp,
                                    nowTimestamp, 1500);
@@ -161,23 +166,21 @@ void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const s
                                if (std::filesystem::exists(symbolFilePathCsv)) {
                                    return symbolFilePathCsv;
                                }
+                           } catch (const std::exception &e) {
+                               spdlog::warn(fmt::format("Updating candles for symbol: {} failed, reason: {}",
+                                                        symbol, e.what()));
                            }
-                           catch (const std::exception& e) {
-                            spdlog::warn(fmt::format("Updating candles for symbol: {} failed, reason: {}",
-                                                     symbol, e.what()));
-                        }
-                     return "";
-                       }, s, std::ref(m_p->m_maxConcurrentDownloadJobs)));
+                           return "";
+                       }, s, std::ref(m_p->maxConcurrentDownloadJobs)));
     }
 
     do {
-        for (auto& future : futures) {
+        for (auto &future: futures) {
             if (isReady(future)) {
                 csvFilePaths.push_back(future.get());
             }
         }
-    }
-    while (csvFilePaths.size() < futures.size());
+    } while (csvFilePaths.size() < futures.size());
 
     std::filesystem::path T6Directory = finalPath;
 
@@ -186,14 +189,15 @@ void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const s
 
     if (convertToT6 && !csvFilePaths.empty()) {
         if (const auto err = createDirectoryRecursively(T6Directory.string())) {
-            throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(), err.message().c_str()));
+            throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(),
+                                                 err.message().c_str()));
         }
         spdlog::info(fmt::format("Converting from csv to t6..."));
-        m_p->m_binanceCommon->convertFromCSVToT6(csvFilePaths, T6Directory.string());
+        m_p->binanceCommon->convertFromCSVToT6(csvFilePaths, T6Directory.string());
     }
 
-    if (m_p->m_deleteDelistedData) {
-        for (const auto& symbol : symbolsToDelete) {
+    if (m_p->deleteDelistedData) {
+        for (const auto &symbol: symbolsToDelete) {
             std::filesystem::path symbolFilePathCsv = finalPath;
             std::filesystem::path symbolFilePathT6 = finalPath;
 
@@ -211,12 +215,14 @@ void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const s
 
             if (std::filesystem::exists(symbolFilePathCsv)) {
                 std::filesystem::remove(symbolFilePathCsv);
-                spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol, symbolFilePathCsv.string());
+                spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol,
+                             symbolFilePathCsv.string());
             }
 
             if (std::filesystem::exists(symbolFilePathT6)) {
                 std::filesystem::remove(symbolFilePathT6);
-                spdlog::info("Removing t6 file for delisted symbol: {}, file: {}...", symbol, symbolFilePathT6.string());
+                spdlog::info("Removing t6 file for delisted symbol: {}, file: {}...", symbol,
+                             symbolFilePathT6.string());
             }
         }
     }
@@ -225,14 +231,12 @@ void BinanceSpotDownloader::updateMarketData(const std::string& dirPath, const s
 void BinanceSpotDownloader::updateMarketData(const std::string &connectionString,
                                              const onSymbolsToUpdate &onSymbolsToUpdateCB,
                                              const onSymbolCompleted &onSymbolCompletedCB) const {
-
     throw std::runtime_error("Unimplemented: BinanceSpotDownloader::updateMarketData()");
 }
 
 void BinanceSpotDownloader::updateFundingRateData(const std::string &dirPath, const std::vector<std::string> &symbols,
                                                   const onSymbolsToUpdate &onSymbolsToUpdateCB,
                                                   const onSymbolCompleted &onSymbolCompletedCB) const {
-
     throw std::runtime_error("Unimplemented: BinanceSpotDownloader::updateFundingRateData()");
 }
 }

@@ -6,7 +6,6 @@ SPDX-License-Identifier: MIT
 Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 */
 
-#include <memory>
 #include "vk/binance/binance_futures_downloader.h"
 #include "vk/bybit/bybit_downloader.h"
 #include "vk/okx/okx_downloader.h"
@@ -20,8 +19,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <algorithm>
 #include "csv.h"
 #include <iostream>
-
-#include "vk/utils/magic_enum_wrapper.hpp"
+#include <memory>
 
 #undef max
 
@@ -29,7 +27,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 
 using namespace vk;
 
-std::vector<std::string> parseZorroAssetList(const std::string& path) {
+std::vector<std::string> parseZorroAssetList(const std::string &path) {
     std::vector<std::string> retVal;
 
     try {
@@ -40,14 +38,13 @@ std::vector<std::string> parseZorroAssetList(const std::string& path) {
         while (in.read_row(symbolStr)) {
             retVal.push_back(symbolStr);
         }
-    }
-    catch (std::exception& e) {
+    } catch (std::exception &e) {
         spdlog::warn(fmt::format("Could not parse Zorro asset file: {}, reason: {}", path, e.what()));
     }
     return retVal;
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     cxxopts::Options options("data_downloader",
                              "Utility for downloading historical data from crypto exchanges, currently only Binance (bnb), Bybit (bybit) and OKX (okx) exchange is supported");
     std::vector<std::string> symbols;
@@ -62,29 +59,29 @@ int main(int argc, char** argv) {
                                                                 1.0));
 
     options.add_options()
-        ("e,exchange",
-         R"(Exchange name, either Binance (bnb), OKX (okx) or Bybit (bybit), example: -e bnb (default: bnb))",
-         cxxopts::value<std::string>()->default_value({"bnb"}))
-        ("o,output", R"(Output directory path, example: -o "C:\Users\UserName\BNBData")",
-         cxxopts::value<std::string>())
-        ("t,data_type",
-         R"(Data type for download, either candles 'c' or funding rate 'fr', example -t c, default is candles)",
-         cxxopts::value<std::string>()->default_value({"c"}))
-        ("s,symbols",
-         R"(Symbols of assets to download, example: -s "BTCUSDT,ETHUSDT", "all" means All symbols, mutually exclusive with parameter -a)",
-         cxxopts::value<std::vector<std::string>>()->default_value({"all"}))
-        ("a,assets_file", R"(Path to Zorro Assets file, mutually exclusive with parameter -s)",
-         cxxopts::value<std::string>()->default_value(""))
-        ("j,jobs", R"(Maximum number of jobs to run in parallel, example -j 8)",
-         cxxopts::value<std::uint32_t>()->default_value(std::to_string(maxJobs)))
-        ("b,bar_size", R"(Bar size in minutes, example -b 5, default is 1)",
-         cxxopts::value<int32_t>()->default_value("1"))
-        ("c,category", R"(Market category, either Spot (s) or Futures (f), example -c f, default is Futures)",
-         cxxopts::value<std::string>()->default_value("f"))
-        ("k,keep_delisted", R"(Keep delisted symbols data files, if not specified delisted files will be deleted)")
-        ("z,t6_conversion", R"(Convert CSV data to T6 format (Zorro Trader format) after download)")
-        ("v,version", R"(Print version and quit)")
-        ("h,help", R"(Print usage and quit)");
+            ("e,exchange",
+             R"(Exchange name, either Binance (bnb), OKX (okx) or Bybit (bybit), example: -e bnb (default: bnb))",
+             cxxopts::value<std::string>()->default_value({"bnb"}))
+            ("o,output", R"(Output directory path, example: -o "C:\Users\UserName\BNBData")",
+             cxxopts::value<std::string>())
+            ("t,data_type",
+             R"(Data type for download, either candles 'c' or funding rate 'fr', example -t c, default is candles)",
+             cxxopts::value<std::string>()->default_value({"c"}))
+            ("s,symbols",
+             R"(Symbols of assets to download, example: -s "BTCUSDT,ETHUSDT", "all" means All symbols, mutually exclusive with parameter -a)",
+             cxxopts::value<std::vector<std::string> >()->default_value({"all"}))
+            ("a,assets_file", R"(Path to Zorro Assets file, mutually exclusive with parameter -s)",
+             cxxopts::value<std::string>()->default_value(""))
+            ("j,jobs", R"(Maximum number of jobs to run in parallel, example -j 8)",
+             cxxopts::value<std::uint32_t>()->default_value(std::to_string(maxJobs)))
+            ("b,bar_size", R"(Bar size in minutes, example -b 5, default is 1)",
+             cxxopts::value<int32_t>()->default_value("1"))
+            ("c,category", R"(Market category, either Spot (s) or Futures (f), example -c f, default is Futures)",
+             cxxopts::value<std::string>()->default_value("f"))
+            ("k,keep_delisted", R"(Keep delisted symbols data files, if not specified delisted files will be deleted)")
+            ("z,t6_conversion", R"(Convert CSV data to T6 format (Zorro Trader format) after download)")
+            ("v,version", R"(Print version and quit)")
+            ("h,help", R"(Print usage and quit)");
     try {
         cxxopts::ParseResult parseResult;
         parseResult = options.parse(argc, argv);
@@ -107,13 +104,12 @@ int main(int argc, char** argv) {
         }
 
         if (const auto assetFile = parseResult["assets_file"].as<std::string>(); assetFile.empty()) {
-            symbols = parseResult["symbols"].as<std::vector<std::string>>();
+            symbols = parseResult["symbols"].as<std::vector<std::string> >();
 
             if (symbols.size() == 1 && symbols[0] == "all") {
                 symbols.clear();
             }
-        }
-        else {
+        } else {
             symbols = parseZorroAssetList(assetFile);
 
             if (symbols.empty()) {
@@ -158,38 +154,36 @@ int main(int argc, char** argv) {
                 outputDirectoryLowerCase.find("okx") != std::string::npos) {
                 std::string response;
                 std::cout
-                    << "Seems that you are trying to save Binance data into Bybit or OKX folder, are you sure? Type y (yes) or n (no)"
-                    << std::endl;
+                        << "Seems that you are trying to save Binance data into Bybit or OKX folder, are you sure? Type y (yes) or n (no)"
+                        << std::endl;
                 std::cin >> response;
 
                 if (response != "y") {
                     return -1;
                 }
             }
-        }
-        else if (exchange == "bybit") {
+        } else if (exchange == "bybit") {
             if (outputDirectoryLowerCase.find("bnb") != std::string::npos ||
                 outputDirectoryLowerCase.find("binance") != std::string::npos ||
                 outputDirectoryLowerCase.find("okx") != std::string::npos) {
                 std::string response;
                 std::cout
-                    << "Seems that you are trying to save Bybit data into Binance or OKX folder, are you sure? Type y (yes) or n (no)"
-                    << std::endl;
+                        << "Seems that you are trying to save Bybit data into Binance or OKX folder, are you sure? Type y (yes) or n (no)"
+                        << std::endl;
                 std::cin >> response;
 
                 if (response != "y") {
                     return -1;
                 }
             }
-        }
-        else if (exchange == "okx") {
+        } else if (exchange == "okx") {
             if (outputDirectoryLowerCase.find("bnb") != std::string::npos ||
                 outputDirectoryLowerCase.find("binance") != std::string::npos ||
                 outputDirectoryLowerCase.find("bybit") != std::string::npos) {
                 std::string response;
                 std::cout
-                    << "Seems that you are trying to save OKX data into Binance or Bybit folder, are you sure? Type y (yes) or n (no)"
-                    << std::endl;
+                        << "Seems that you are trying to save OKX data into Binance or Bybit folder, are you sure? Type y (yes) or n (no)"
+                        << std::endl;
                 std::cin >> response;
 
                 if (response != "y") {
@@ -215,15 +209,13 @@ int main(int argc, char** argv) {
         }
         if (category == "s") {
             marketCategory = MarketCategory::Spot;
-        }
-        else {
+        } else {
             marketCategory = MarketCategory::Futures;
         }
 
         convertToT6 = parseResult["t6_conversion"].as<bool>();
         keepDelistedData = parseResult["keep_delisted"].as<bool>();
-    }
-    catch (const std::exception&) {
+    } catch (const std::exception &) {
         spdlog::critical("Wrong parameters!");
         spdlog::info(options.help());
         return -1;
@@ -240,38 +232,24 @@ int main(int argc, char** argv) {
 
         std::unique_ptr<IExchangeDownloader> downloader;
         const auto candleInterval = Downloader::minutesToCandleInterval(barSizeInMinutes);
-
         const bool deleteDelistedData = !keepDelistedData;
 
         if (exchange == "bnb" && marketCategory == MarketCategory::Futures) {
             downloader = std::make_unique<BinanceFuturesDownloader>(maxJobs, deleteDelistedData);
-        }
-        else if (exchange == "bnb" && marketCategory == MarketCategory::Spot) {
+        } else if (exchange == "bnb" && marketCategory == MarketCategory::Spot) {
             downloader = std::make_unique<BinanceSpotDownloader>(maxJobs, deleteDelistedData);
-        }
-        else if (exchange == "bybit") {
-            spdlog::info(
-                "Limiting number of parallel jobs to 1, Bybit Rate limiting does not work according to Docs "
-                "(missing header values in response)");
-            downloader = std::make_unique<BybitDownloader>(1, marketCategory, deleteDelistedData);
-        }
-        else if (exchange == "okx") {
-            if (marketCategory == MarketCategory::Spot) {
-                spdlog::error(
-                    "Unsupported market category: {} for OKX exchange", magic_enum::enum_name(marketCategory));
-                return 0;
-            }
-            downloader = std::make_unique<OKXDownloader>(maxJobs, deleteDelistedData);
+        } else if (exchange == "bybit") {
+            downloader = std::make_unique<BybitDownloader>(maxJobs, marketCategory, deleteDelistedData);
+        } else if (exchange == "okx") {
+            downloader = std::make_unique<OKXDownloader>(maxJobs, marketCategory, deleteDelistedData);
         }
 
         if (dataType == "c") {
             downloader->updateMarketData(outputDirectory, symbols, candleInterval, {}, {}, convertToT6);
-        }
-        else if (dataType == "fr") {
+        } else if (dataType == "fr") {
             downloader->updateFundingRateData(outputDirectory, symbols, {}, {});
         }
-    }
-    catch (std::exception& e) {
+    } catch (std::exception &e) {
         spdlog::critical(e.what());
     }
 

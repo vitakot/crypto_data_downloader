@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 4.0)
 project(crypto_data_downloader)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -13,7 +13,6 @@ endif ()
 
 find_package(spdlog CONFIG REQUIRED)
 find_package(cxxopts CONFIG REQUIRED)
-find_package(PostgreSQL REQUIRED)
 
 add_subdirectory(binance_cpp_api)
 add_subdirectory(bybit_cpp_api)
@@ -38,10 +37,9 @@ set(SOURCES
         src/binance_futures_downloader.cpp
         src/binance_spot_downloader.cpp
         src/bybit_downloader.cpp
-        src/postgres_connector.cpp
         src/okx_downloader.cpp
         src/binance_common.cpp
 )
 
 add_executable(crypto_data_downloader main.cpp ${SOURCES} ${HEADERS})
-target_link_libraries(crypto_data_downloader PRIVATE spdlog::spdlog_header_only PostgreSQL::PostgreSQL binance_api bybit_api okx_api)
+target_link_libraries(crypto_data_downloader PRIVATE spdlog::spdlog_header_only binance_api bybit_api okx_api)
