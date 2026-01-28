@@ -23,7 +23,7 @@ A high-performance command-line utility for downloading historical market data (
 |----------|:-------:|:----:|:-------:|:-------------:|
 | Binance  | ✅ | ✅ | ✅ | ✅ |
 | Bybit    | ✅ | ✅ | ✅ | ✅ |
-| OKX      | ✅ | ❌ | ✅ | ✅ |
+| OKX      | ✅ | ✅ | ✅ | ✅ |
 
 ## Requirements
 
@@ -241,3 +241,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Disclaimer
 
 This software is for educational and research purposes only. Use at your own risk. The author is not responsible for any financial losses incurred through the use of this software or the data it downloads.
+
