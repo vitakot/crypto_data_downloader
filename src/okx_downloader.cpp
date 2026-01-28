@@ -35,8 +35,6 @@ struct OKXDownloader::P {
 
     static bool writeCandlesToCSVFile(const std::vector<Candle> &candles, const std::string &path, bool rewrite);
 
-    static bool reverseCandlesInCSVFile(const std::string &path);
-
     static bool readCandlesFromCSVFile(const std::string &path, std::vector<Candle> &candles);
 
     void convertFromCSVToT6(const std::vector<std::filesystem::path> &filePaths, const std::string &outDirPath) const;
@@ -201,15 +199,6 @@ bool OKXDownloader::P::writeCandlesToCSVFile(const std::vector<Candle> &candles,
 
     ofs.close();
     return true;
-}
-
-bool OKXDownloader::P::reverseCandlesInCSVFile(const std::string &path) {
-    if (std::vector<Candle> candles; readCandlesFromCSVFile(path, candles)) {
-        std::ranges::reverse(candles);
-        return writeCandlesToCSVFile(candles, path, true);
-    }
-
-    return false;
 }
 
 int64_t OKXDownloader::P::checkSymbolCSVFile(const std::string &path) {
@@ -467,13 +456,6 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                                            }
                                        }
                                    });
-
-                               if (!P::reverseCandlesInCSVFile(symbolFilePathCsv.string())) {
-                                   spdlog::warn(fmt::format(
-                                       "CSV file for symbol: {} reversion failed, removing data...", symbol));
-                                   std::filesystem::remove(symbolFilePathCsv);
-                                   return "";
-                               }
 
                                // Return the path if the CSV file exists (for T6 conversion)
                                if (std::filesystem::exists(symbolFilePathCsv)) {
