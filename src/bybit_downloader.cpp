@@ -28,7 +28,7 @@ struct BybitDownloader::P {
     std::unique_ptr<RESTClient> bybitClient;
     mutable Semaphore maxConcurrentConvertJobs;
     mutable std::recursive_mutex locker;
-    Semaphore maxConcurrentDownloadJobs{2};
+    Semaphore maxConcurrentDownloadJobs{5};
     MarketCategory marketCategory = MarketCategory::Futures;
     bool deleteDelistedData = false;
 

@@ -446,7 +446,7 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
 
                            try {
                                const auto candles = m_p->okxClient->getHistoricalPrices(
-                                   symbol, okxBarSize, fromTimeStamp, nowTimestamp, -1);
+                                   symbol, okxBarSize, fromTimeStamp, nowTimestamp, 300);
 
                                if (!candles.empty()) {
                                    if (P::writeCandlesToCSVFile(candles, symbolFilePathCsv.string(), false)) {
