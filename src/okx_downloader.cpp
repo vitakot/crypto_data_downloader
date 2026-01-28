@@ -445,17 +445,14 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                            const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
 
                            try {
-                               const auto candles = m_p->okxClient->getHistoricalPrices(symbol,
-                                   okxBarSize,
-                                   fromTimeStamp,
-                                   nowTimestamp, 100, [symbolFilePathCsv, symbol](const std::vector<Candle> &cnd) {
-                                       if (!cnd.empty()) {
-                                           if (!P::writeCandlesToCSVFile(cnd, symbolFilePathCsv.string(), false)) {
-                                               spdlog::warn(
-                                                   fmt::format("CSV file for symbol: {} update failed", symbol));
-                                           }
-                                       }
-                                   });
+                               const auto candles = m_p->okxClient->getHistoricalPrices(
+                                   symbol, okxBarSize, fromTimeStamp, nowTimestamp, -1);
+
+                               if (!candles.empty()) {
+                                   if (P::writeCandlesToCSVFile(candles, symbolFilePathCsv.string(), false)) {
+                                       spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
+                                   }
+                               }
 
                                // Return the path if the CSV file exists (for T6 conversion)
                                if (std::filesystem::exists(symbolFilePathCsv)) {
