@@ -9,12 +9,14 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include "vk/okx/okx_downloader.h"
 #include "vk/okx/okx.h"
 #include "vk/okx/okx_rest_client.h"
+#include "vk/okx/okx_market_data_utils.h"
 #include "vk/downloader.h"
 #include "vk/utils/utils.h"
 #include "vk/utils/semaphore.h"
 #include "csv.h"
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/ranges.h>
 
@@ -343,6 +345,11 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
         throw std::invalid_argument("invalid OKX bar size: " + std::to_string(barSizeInMinutes) + " m");
     }
 
+    // Market data history endpoint only supports 1-minute candles
+    if (okxBarSize != BarSize::_1m) {
+        throw std::invalid_argument("OKX market data history only supports 1-minute candles");
+    }
+
     std::vector<std::future<std::filesystem::path> > futures;
     const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
@@ -376,6 +383,12 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
 
     const auto exchangeInstruments = m_p->okxClient->getInstruments(instrumentType);
 
+    // Create a map from instId to Instrument for quick lookup
+    std::map<std::string, Instrument> instrumentMap;
+    for (const auto &inst: exchangeInstruments) {
+        instrumentMap[inst.instId] = inst;
+    }
+
     if (symbolsToUpdate.empty()) {
         for (const auto &el: exchangeInstruments) {
             if (el.settleCcy == "USDT" || el.quoteCcy == "USD") {
@@ -408,7 +421,8 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
     for (const auto &s: symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [finalPath, this, &okxBarSize, &barSizeInMinutes, &csvDirName, &t6DirName, convertToT6](
+                       [finalPath, this, &barSizeInMinutes, &csvDirName, &t6DirName, convertToT6, &instrumentMap,
+                        instrumentType](
                    const std::string &symbol,
                    Semaphore &maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
@@ -442,16 +456,116 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
 
                            spdlog::info(fmt::format("Updating candles for symbol: {}...", symbol));
 
-                           const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
+                           int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
+
+                           // Get instFamily and listTime for market data history API
+                           std::string instFamilyOrId;
+                           int64_t instrumentListTime = 0;
+
+                           auto it = instrumentMap.find(symbol);
+                           if (it != instrumentMap.end()) {
+                               instrumentListTime = it->second.listTime;
+                               if (instrumentType == InstrumentType::SPOT) {
+                                   instFamilyOrId = symbol;
+                               } else {
+                                   instFamilyOrId = it->second.instFamily;
+                               }
+                           } else {
+                               spdlog::warn(fmt::format("Instrument {} not found in map, skipping", symbol));
+                               return "";
+                           }
+
+                           // Use instrument listing time if file doesn't exist or has older data
+                           if (instrumentListTime > 0 && fromTimeStamp < instrumentListTime) {
+                               fromTimeStamp = instrumentListTime;
+                           }
 
                            try {
-                               const auto candles = m_p->okxClient->getHistoricalPrices(
-                                   symbol, okxBarSize, fromTimeStamp, nowTimestamp, 300);
+                               // OKX API limits: max 20 days for daily, max 20 months for monthly
+                               // Use 19 days to be safe (OKX may count calendar days differently)
+                               constexpr int64_t maxDailyRangeMs = 19LL * 24 * 60 * 60 * 1000; // 19 days in ms
 
-                               if (!candles.empty()) {
-                                   if (P::writeCandlesToCSVFile(candles, symbolFilePathCsv.string(), false)) {
-                                       spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
+                               int64_t currentStart = fromTimeStamp;
+                               int64_t totalNewCandles = 0;
+                               int64_t lastSavedTimestamp = fromTimeStamp;
+
+                               while (currentStart < nowTimestamp) {
+                                   int64_t currentEnd = std::min(currentStart + maxDailyRangeMs, nowTimestamp);
+
+                                   // Get list of files for this date range
+                                   const auto history = m_p->okxClient->getMarketDataHistory(
+                                       MarketDataModule::Candles1m,
+                                       instrumentType,
+                                       instFamilyOrId,
+                                       DateAggrType::daily,
+                                       currentStart,
+                                       currentEnd);
+
+                                   if (history.details.empty()) {
+                                       currentStart = currentEnd;
+                                       continue;
                                    }
+
+                                   // Collect all files and sort by date (oldest first)
+                                   std::vector<MarketDataFileInfo> allFiles;
+                                   for (const auto &detail : history.details) {
+                                       for (const auto &fileInfo : detail.groupDetails) {
+                                           allFiles.push_back(fileInfo);
+                                       }
+                                   }
+
+                                   std::ranges::sort(allFiles, [](const MarketDataFileInfo &a, const MarketDataFileInfo &b) {
+                                       return a.dateTs < b.dateTs;
+                                   });
+
+                                   // Process each file individually (oldest first)
+                                   for (const auto &fileInfo : allFiles) {
+                                       // Skip files that are older than what we already have
+                                       // dateTs is the START of the day, so we need data where ts > lastSavedTimestamp
+                                       if (fileInfo.dateTs + 24LL * 60 * 60 * 1000 <= lastSavedTimestamp) {
+                                           continue;
+                                       }
+
+                                       // Download ZIP file
+                                       const auto zipData = m_p->okxClient->downloadMarketDataFile(fileInfo.url);
+
+                                       // Extract CSV from ZIP
+                                       const auto csvData = okx::utils::extractZip(zipData);
+
+                                       // Parse CSV to candles
+                                       auto candles = okx::utils::parseCandlesCsv(csvData);
+
+                                       if (candles.empty()) {
+                                           continue;
+                                       }
+
+                                       // Sort by timestamp
+                                       std::ranges::sort(candles, [](const Candle &a, const Candle &b) {
+                                           return a.ts < b.ts;
+                                       });
+
+                                       // Filter out candles we already have
+                                       std::vector<Candle> newCandles;
+                                       for (const auto &candle : candles) {
+                                           if (candle.ts > lastSavedTimestamp) {
+                                               newCandles.push_back(candle);
+                                           }
+                                       }
+
+                                       if (!newCandles.empty()) {
+                                           P::writeCandlesToCSVFile(newCandles, symbolFilePathCsv.string(), false);
+                                           totalNewCandles += static_cast<int64_t>(newCandles.size());
+
+                                           // Update last saved timestamp for next file
+                                           lastSavedTimestamp = newCandles.back().ts;
+                                       }
+                                   }
+
+                                   currentStart = currentEnd;
+                               }
+
+                               if (totalNewCandles > 0) {
+                                   spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
                                }
 
                                // Return the path if the CSV file exists (for T6 conversion)
