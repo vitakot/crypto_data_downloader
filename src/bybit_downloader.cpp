@@ -453,6 +453,7 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
                                        }
                                    });
 
+                               spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
                                return symbolFilePathCsv;
                            } catch (const std::exception &e) {
                                spdlog::warn(fmt::format("Updating candles for symbol: {} failed, reason: {}",
