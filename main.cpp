@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
     int32_t barSizeInMinutes = 1;
     auto marketCategory = MarketCategory::Futures;
     bool convertToT6 = false;
-    bool keepDelistedData = false;
+    bool keepDelistedData = true;
     std::uint32_t maxJobs = static_cast<std::uint32_t>(std::max(std::floor(std::thread::hardware_concurrency() * 0.75),
                                                                 1.0));
 
@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
              cxxopts::value<int32_t>()->default_value("1"))
             ("c,category", R"(Market category, either Spot (s) or Futures (f), example -c f, default is Futures)",
              cxxopts::value<std::string>()->default_value("f"))
-            ("k,keep_delisted", R"(Keep delisted symbols data files, if not specified delisted files will be deleted)")
+            ("d,delete_delisted", R"(Delete delisted symbols data files, if not specified delisted files will be preserved)")
             ("z,t6_conversion", R"(Convert CSV data to T6 format (Zorro Trader format) after download)")
             ("v,version", R"(Print version and quit)")
             ("h,help", R"(Print usage and quit)");
@@ -214,7 +214,7 @@ int main(int argc, char **argv) {
         }
 
         convertToT6 = parseResult["t6_conversion"].as<bool>();
-        keepDelistedData = parseResult["keep_delisted"].as<bool>();
+        keepDelistedData = !parseResult["delete_delisted"].as<bool>();
     } catch (const std::exception &) {
         spdlog::critical("Wrong parameters!");
         spdlog::info(options.help());
