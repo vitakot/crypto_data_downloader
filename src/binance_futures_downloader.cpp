@@ -125,8 +125,8 @@ bool BinanceFuturesDownloader::P::writeFundingRatesToCSVFile(const std::vector<f
     }
 
     for (const auto &record: fr) {
-        ofs << record.m_fundingTime << ",";
-        ofs << record.m_fundingRate << std::endl;
+        ofs << record.fundingTime << ",";
+        ofs << record.fundingRate << std::endl;
     }
 
     ofs.close();
@@ -162,11 +162,11 @@ void BinanceFuturesDownloader::updateMarketData(const std::string &dirPath, cons
 
     const auto exchangeInfo = m_p->bnbFuturesClient->getExchangeInfo();
 
-    for (const auto &limit: exchangeInfo.m_rateLimits) {
-        if (limit.m_rateLimitType == RateLimitType::REQUEST_WEIGHT && limit.m_intervalNum == 1 &&
-            limit.m_interval == RateLimitInterval::MINUTE) {
-            spdlog::info(fmt::format("Weight limit: {}", limit.m_limit));
-            m_p->bnbFuturesClient->setAPIWeightLimit(limit.m_limit);
+    for (const auto &limit: exchangeInfo.rateLimits) {
+        if (limit.rateLimitType == RateLimitType::REQUEST_WEIGHT && limit.intervalNum == 1 &&
+            limit.interval == RateLimitInterval::MINUTE) {
+            spdlog::info(fmt::format("Weight limit: {}", limit.limit));
+            m_p->bnbFuturesClient->setAPIWeightLimit(limit.limit);
         }
     }
 
@@ -174,12 +174,12 @@ void BinanceFuturesDownloader::updateMarketData(const std::string &dirPath, cons
         constexpr auto symbolContract = futures::ContractType::PERPETUAL;
         const auto symbolType = std::string(magic_enum::enum_name(symbolContract));
 
-        for (const auto &el: exchangeInfo.m_symbols) {
-            if (el.m_contractType == symbolType && el.m_quoteAsset == "USDT") {
-                if (el.m_status == ContractStatus::TRADING) {
-                    symbolsToUpdate.push_back(el.m_symbol);
+        for (const auto &el: exchangeInfo.symbols) {
+            if (el.contractType == symbolType && el.quoteAsset == "USDT") {
+                if (el.status == ContractStatus::TRADING) {
+                    symbolsToUpdate.push_back(el.symbol);
                 } else {
-                    symbolsToDelete.push_back(el.m_symbol);
+                    symbolsToDelete.push_back(el.symbol);
                 }
             }
         }
@@ -187,15 +187,15 @@ void BinanceFuturesDownloader::updateMarketData(const std::string &dirPath, cons
         std::vector<std::string> tempSymbols;
 
         for (const auto &symbol: symbolsToUpdate) {
-            auto it = std::ranges::find_if(exchangeInfo.m_symbols, [symbol](const futures::Symbol &s) {
-                return s.m_symbol == symbol;
+            auto it = std::ranges::find_if(exchangeInfo.symbols, [symbol](const futures::Symbol &s) {
+                return s.symbol == symbol;
             });
 
-            if (it == exchangeInfo.m_symbols.end() || it->m_status != ContractStatus::TRADING) {
+            if (it == exchangeInfo.symbols.end() || it->status != ContractStatus::TRADING) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", symbol));
             } else {
-                tempSymbols.push_back(it->m_symbol);
+                tempSymbols.push_back(it->symbol);
             }
         }
 
@@ -350,11 +350,11 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string &dirPath,
 
     const auto exchangeInfo = m_p->bnbFuturesClient->getExchangeInfo();
 
-    for (const auto &limit: exchangeInfo.m_rateLimits) {
-        if (limit.m_rateLimitType == RateLimitType::REQUEST_WEIGHT && limit.m_intervalNum == 1 &&
-            limit.m_interval == RateLimitInterval::MINUTE) {
-            spdlog::info(fmt::format("Wight limit: {}", limit.m_limit));
-            m_p->bnbFuturesClient->setAPIWeightLimit(limit.m_limit);
+    for (const auto &limit: exchangeInfo.rateLimits) {
+        if (limit.rateLimitType == RateLimitType::REQUEST_WEIGHT && limit.intervalNum == 1 &&
+            limit.interval == RateLimitInterval::MINUTE) {
+            spdlog::info(fmt::format("Wight limit: {}", limit.limit));
+            m_p->bnbFuturesClient->setAPIWeightLimit(limit.limit);
         }
     }
 
@@ -362,12 +362,12 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string &dirPath,
         constexpr auto symbolContract = futures::ContractType::PERPETUAL;
         const auto symbolType = std::string(magic_enum::enum_name(symbolContract));
 
-        for (const auto &el: exchangeInfo.m_symbols) {
-            if (el.m_contractType == symbolType && el.m_quoteAsset == "USDT") {
-                if (el.m_status == ContractStatus::TRADING) {
-                    symbolsToUpdate.push_back(el.m_symbol);
+        for (const auto &el: exchangeInfo.symbols) {
+            if (el.contractType == symbolType && el.quoteAsset == "USDT") {
+                if (el.status == ContractStatus::TRADING) {
+                    symbolsToUpdate.push_back(el.symbol);
                 } else {
-                    symbolsToDelete.push_back(el.m_symbol);
+                    symbolsToDelete.push_back(el.symbol);
                 }
             }
         }
@@ -375,16 +375,16 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string &dirPath,
         std::vector<std::string> tempSymbols;
 
         for (const auto &symbol: symbolsToUpdate) {
-            auto it = std::ranges::find_if(exchangeInfo.m_symbols, [symbol](const futures::Symbol &s) {
-                return s.m_symbol == symbol;
+            auto it = std::ranges::find_if(exchangeInfo.symbols, [symbol](const futures::Symbol &s) {
+                return s.symbol == symbol;
             });
 
-            if (it == exchangeInfo.m_symbols.end() || it->m_status != ContractStatus::TRADING) {
+            if (it == exchangeInfo.symbols.end() || it->status != ContractStatus::TRADING) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format(
                     "Symbol: {} not found on Exchange, probably delisted", symbol));
             } else {
-                tempSymbols.push_back(it->m_symbol);
+                tempSymbols.push_back(it->symbol);
             }
         }
 
@@ -422,7 +422,7 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string &dirPath,
                                    1000);
                                if (!fr.empty()) {
                                    if (fr.size() == 1) {
-                                       if (fromTimeStamp == fr.front().m_fundingTime) {
+                                       if (fromTimeStamp == fr.front().fundingTime) {
                                            spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
                                            return symbolFilePathCsv;
                                        }

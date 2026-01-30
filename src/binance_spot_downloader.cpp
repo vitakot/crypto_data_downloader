@@ -75,34 +75,34 @@ void BinanceSpotDownloader::updateMarketData(const std::string &dirPath, const s
 
     const auto exchangeInfo = m_p->bnbSpotClient->getExchangeInfo();
 
-    for (const auto &limit: exchangeInfo.m_rateLimits) {
-        if (limit.m_rateLimitType == RateLimitType::REQUEST_WEIGHT && limit.m_intervalNum == 1 &&
-            limit.m_interval == RateLimitInterval::MINUTE) {
-            spdlog::info(fmt::format("Weight limit: {}", limit.m_limit));
-            m_p->bnbSpotClient->setAPIWeightLimit(limit.m_limit);
+    for (const auto &limit: exchangeInfo.rateLimits) {
+        if (limit.rateLimitType == RateLimitType::REQUEST_WEIGHT && limit.intervalNum == 1 &&
+            limit.interval == RateLimitInterval::MINUTE) {
+            spdlog::info(fmt::format("Weight limit: {}", limit.limit));
+            m_p->bnbSpotClient->setAPIWeightLimit(limit.limit);
         }
     }
 
     if (symbolsToUpdate.empty()) {
-        for (const auto &el: exchangeInfo.m_symbols) {
-            if (el.m_status == ContractStatus::TRADING && el.m_quoteAsset == "USDT") {
-                symbolsToUpdate.push_back(el.m_symbol);
+        for (const auto &el: exchangeInfo.symbols) {
+            if (el.status == ContractStatus::TRADING && el.quoteAsset == "USDT") {
+                symbolsToUpdate.push_back(el.symbol);
             }
         }
     } else {
         std::vector<std::string> tempSymbols;
 
         for (const auto &symbol: symbolsToUpdate) {
-            auto it = std::ranges::find_if(exchangeInfo.m_symbols, [symbol](const spot::Symbol &s) {
-                return s.m_symbol == symbol;
+            auto it = std::ranges::find_if(exchangeInfo.symbols, [symbol](const spot::Symbol &s) {
+                return s.symbol == symbol;
             });
 
-            if (it == exchangeInfo.m_symbols.end()) {
+            if (it == exchangeInfo.symbols.end()) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format(
                     "Symbol: {} not found on Exchange, probably delisted", symbol));
             } else {
-                tempSymbols.push_back(it->m_symbol);
+                tempSymbols.push_back(it->symbol);
             }
         }
 

@@ -51,13 +51,13 @@ bool BinanceCommon::writeCSVCandlesToZorroT6File(const std::string &csvPath, con
 
     for (const auto &candle: std::ranges::reverse_view(candles)) {
         T6 t6;
-        t6.fOpen = static_cast<float>(candle.m_open);
-        t6.fHigh = static_cast<float>(candle.m_high);
-        t6.fLow = static_cast<float>(candle.m_low);
-        t6.fClose = static_cast<float>(candle.m_close);
+        t6.fOpen = static_cast<float>(candle.open);
+        t6.fHigh = static_cast<float>(candle.high);
+        t6.fLow = static_cast<float>(candle.low);
+        t6.fClose = static_cast<float>(candle.close);
         t6.fVal = 0.0;
-        t6.fVol = static_cast<float>(candle.m_volume);
-        t6.time = convertTimeMs(candle.m_closeTime);
+        t6.fVol = static_cast<float>(candle.volume);
+        t6.time = convertTimeMs(candle.closeTime);
         ofs.write(reinterpret_cast<char *>(&t6), sizeof(T6));
     }
 
@@ -71,8 +71,8 @@ bool BinanceCommon::readCandlesFromCSVFile(const std::string &path, std::vector<
         in.read_header(io::ignore_extra_column, "close_time", "open", "high", "low", "close", "volume", "timestamp");
 
         Candle candle;
-        while (in.read_row(candle.m_closeTime, candle.m_open, candle.m_high, candle.m_low, candle.m_close,
-                           candle.m_volume, candle.m_openTime)) {
+        while (in.read_row(candle.closeTime, candle.open, candle.high, candle.low, candle.close,
+                           candle.volume, candle.openTime)) {
             candles.push_back(candle);
         }
     } catch (std::exception &e) {
@@ -108,18 +108,18 @@ bool BinanceCommon::writeCandlesToCSVFile(const std::vector<Candle> &candles, co
     }
 
     for (const auto &candle: candles) {
-        ofs << candle.m_closeTime << ",";
-        ofs << candle.m_open << ",";
-        ofs << candle.m_high << ",";
-        ofs << candle.m_low << ",";
-        ofs << candle.m_close << ",";
-        ofs << candle.m_volume << ",";
-        ofs << candle.m_openTime << ",";
-        ofs << candle.m_quoteVolume << ",";
-        ofs << candle.m_numberOfTrades << ",";
-        ofs << candle.m_takerBuyVolume << ",";
-        ofs << candle.m_takerQuoteVolume << ",";
-        ofs << candle.m_ignore << std::endl;
+        ofs << candle.closeTime << ",";
+        ofs << candle.open << ",";
+        ofs << candle.high << ",";
+        ofs << candle.low << ",";
+        ofs << candle.close << ",";
+        ofs << candle.volume << ",";
+        ofs << candle.openTime << ",";
+        ofs << candle.quoteVolume << ",";
+        ofs << candle.numberOfTrades << ",";
+        ofs << candle.takerBuyVolume << ",";
+        ofs << candle.takerQuoteVolume << ",";
+        ofs << candle.ignore << std::endl;
     }
 
     ofs.close();

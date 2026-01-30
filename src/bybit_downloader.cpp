@@ -65,8 +65,8 @@ bool BybitDownloader::P::readCandlesFromCSVFile(const std::string &path, std::ve
         in.read_header(io::ignore_extra_column, "open_time", "open", "high", "low", "close", "volume");
 
         Candle candle;
-        while (in.read_row(candle.m_startTime, candle.m_open, candle.m_high, candle.m_low, candle.m_close,
-                           candle.m_volume)) {
+        while (in.read_row(candle.startTime, candle.open, candle.high, candle.low, candle.close,
+                           candle.volume)) {
             candles.push_back(candle);
         }
     } catch (std::exception &e) {
@@ -98,13 +98,13 @@ bool BybitDownloader::P::writeCSVCandlesToZorroT6File(const std::string &csvPath
 
     for (const auto &candle: std::ranges::reverse_view(candles)) {
         T6 t6;
-        t6.fOpen = static_cast<float>(candle.m_open);
-        t6.fHigh = static_cast<float>(candle.m_high);
-        t6.fLow = static_cast<float>(candle.m_low);
-        t6.fClose = static_cast<float>(candle.m_close);
+        t6.fOpen = static_cast<float>(candle.open);
+        t6.fHigh = static_cast<float>(candle.high);
+        t6.fLow = static_cast<float>(candle.low);
+        t6.fClose = static_cast<float>(candle.close);
         t6.fVal = 0.0;
-        t6.fVol = static_cast<float>(candle.m_volume);
-        t6.time = convertTimeMs(candle.m_startTime + numMSecondsForInterval);
+        t6.fVol = static_cast<float>(candle.volume);
+        t6.time = convertTimeMs(candle.startTime + numMSecondsForInterval);
         ofs.write(reinterpret_cast<char *>(&t6), sizeof(T6));
     }
 
@@ -178,12 +178,12 @@ bool BybitDownloader::P::writeCandlesToCSVFile(const std::vector<Candle> &candle
     }
 
     for (const auto &candle: candles) {
-        ofs << candle.m_startTime << ",";
-        ofs << candle.m_open << ",";
-        ofs << candle.m_high << ",";
-        ofs << candle.m_low << ",";
-        ofs << candle.m_close << ",";
-        ofs << candle.m_volume << std::endl;
+        ofs << candle.startTime << ",";
+        ofs << candle.open << ",";
+        ofs << candle.high << ",";
+        ofs << candle.low << ",";
+        ofs << candle.close << ",";
+        ofs << candle.volume << std::endl;
     }
 
     ofs.close();
@@ -308,8 +308,8 @@ bool BybitDownloader::P::writeFundingRatesToCSVFile(const std::vector<FundingRat
     }
 
     for (const auto &record: fr) {
-        ofs << record.m_fundingRateTimestamp << ",";
-        ofs << record.m_fundingRate << std::endl;
+        ofs << record.fundingRateTimestamp << ",";
+        ofs << record.fundingRate << std::endl;
     }
 
     ofs.close();
@@ -364,28 +364,28 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
 
     if (symbolsToUpdate.empty()) {
         for (const auto &el: exchangeSymbols) {
-            if (el.m_quoteCoin == "USDT") {
-                if (el.m_contractStatus == ContractStatus::Trading) {
-                    symbolsToUpdate.push_back(el.m_symbol);
+            if (el.quoteCoin == "USDT") {
+                if (el.contractStatus == ContractStatus::Trading) {
+                    symbolsToUpdate.push_back(el.symbol);
                 } else {
-                    symbolsToDelete.push_back(el.m_symbol);
+                    symbolsToDelete.push_back(el.symbol);
                 }
             }
         }
     } else {
         std::vector<std::string> tempSymbols;
 
-        for (const auto &symbol: symbolsToUpdate) {
-            auto it = std::ranges::find_if(exchangeSymbols, [symbol](const Instrument &i) {
-                return i.m_symbol == symbol;
+        for (const auto &sym: symbolsToUpdate) {
+            auto it = std::ranges::find_if(exchangeSymbols, [sym](const Instrument &i) {
+                return i.symbol == sym;
             });
 
-            if (it == exchangeSymbols.end() || it->m_contractStatus != ContractStatus::Trading) {
-                symbolsToDelete.push_back(symbol);
+            if (it == exchangeSymbols.end() || it->contractStatus != ContractStatus::Trading) {
+                symbolsToDelete.push_back(sym);
                 spdlog::info(fmt::format(
-                    "Symbol: {} not found on Exchange, probably delisted", symbol));
+                    "Symbol: {} not found on Exchange, probably delisted", sym));
             } else {
-                tempSymbols.push_back(it->m_symbol);
+                tempSymbols.push_back(it->symbol);
             }
         }
 
@@ -544,11 +544,11 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
         constexpr auto symbolContract = ContractType::LinearPerpetual;
 
         for (const auto &el: instrumentsInfo) {
-            if (el.m_contractType == symbolContract && el.m_quoteCoin == "USDT") {
-                if (el.m_contractStatus == ContractStatus::Trading) {
-                    symbolsToUpdate.push_back(el.m_symbol);
+            if (el.contractType == symbolContract && el.quoteCoin == "USDT") {
+                if (el.contractStatus == ContractStatus::Trading) {
+                    symbolsToUpdate.push_back(el.symbol);
                 } else {
-                    symbolsToDelete.push_back(el.m_symbol);
+                    symbolsToDelete.push_back(el.symbol);
                 }
             }
         }
@@ -557,15 +557,15 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
 
         for (const auto &symbol: symbolsToUpdate) {
             auto it = std::ranges::find_if(instrumentsInfo, [symbol](const Instrument &i) {
-                return i.m_symbol == symbol;
+                return i.symbol == symbol;
             });
 
-            if (it == instrumentsInfo.end() || it->m_contractStatus != ContractStatus::Trading) {
+            if (it == instrumentsInfo.end() || it->contractStatus != ContractStatus::Trading) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format(
                     "Symbol: {} not found on Exchange, probably delisted", symbol));
             } else {
-                tempSymbols.push_back(it->m_symbol);
+                tempSymbols.push_back(it->symbol);
             }
         }
 
@@ -601,7 +601,7 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
                                if (const auto fr = m_p->bybitClient->getFundingRates(
                                    Category::linear, symbol, fromTimeStamp + 1000, nowTimestamp); !fr.empty()) {
                                    if (fr.size() == 1) {
-                                       if (fromTimeStamp == fr.front().m_fundingRateTimestamp) {
+                                       if (fromTimeStamp == fr.front().fundingRateTimestamp) {
                                            spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
                                            return symbolFilePathCsv;
                                        }
