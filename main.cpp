@@ -9,6 +9,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include "vk/binance/binance_futures_downloader.h"
 #include "vk/bybit/bybit_downloader.h"
 #include "vk/okx/okx_downloader.h"
+#include "vk/mexc/mexc_futures_downloader.h"
 #include "vk/downloader.h"
 #include "vk/binance/binance_spot_downloader.h"
 #include <spdlog/spdlog.h>
@@ -46,7 +47,7 @@ std::vector<std::string> parseZorroAssetList(const std::string &path) {
 
 int main(int argc, char **argv) {
     cxxopts::Options options("data_downloader",
-                             "Utility for downloading historical data from crypto exchanges, currently only Binance (bnb), Bybit (bybit) and OKX (okx) exchange is supported");
+                             "Utility for downloading historical data from crypto exchanges, currently Binance (bnb), Bybit (bybit), OKX (okx) and MEXC (mexc) exchanges are supported");
     std::vector<std::string> symbols;
     std::string outputDirectory;
     std::string dataType;
@@ -60,7 +61,7 @@ int main(int argc, char **argv) {
 
     options.add_options()
             ("e,exchange",
-             R"(Exchange name, either Binance (bnb), OKX (okx) or Bybit (bybit), example: -e bnb (default: bnb))",
+             R"(Exchange name: Binance (bnb), OKX (okx), Bybit (bybit) or MEXC (mexc), example: -e bnb (default: bnb))",
              cxxopts::value<std::string>()->default_value({"bnb"}))
             ("o,output", R"(Output directory path, example: -o "C:\Users\UserName\BNBData")",
              cxxopts::value<std::string>())
@@ -138,8 +139,8 @@ int main(int argc, char **argv) {
 
         exchange = parseResult["exchange"].as<std::string>();
 
-        if (exchange != "bnb" && exchange != "bybit" && exchange != "okx") {
-            spdlog::error("Wrong value of exchange parameter, must be 'bnb', 'okx' or 'bybit', is: {}", exchange);
+        if (exchange != "bnb" && exchange != "bybit" && exchange != "okx" && exchange != "mexc") {
+            spdlog::error("Wrong value of exchange parameter, must be 'bnb', 'okx', 'bybit' or 'mexc', is: {}", exchange);
             spdlog::info(options.help());
             return -1;
         }
@@ -151,10 +152,11 @@ int main(int argc, char **argv) {
 
         if (exchange == "bnb") {
             if (outputDirectoryLowerCase.find("bybit") != std::string::npos ||
-                outputDirectoryLowerCase.find("okx") != std::string::npos) {
+                outputDirectoryLowerCase.find("okx") != std::string::npos ||
+                outputDirectoryLowerCase.find("mexc") != std::string::npos) {
                 std::string response;
                 std::cout
-                        << "Seems that you are trying to save Binance data into Bybit or OKX folder, are you sure? Type y (yes) or n (no)"
+                        << "Seems that you are trying to save Binance data into another exchange folder, are you sure? Type y (yes) or n (no)"
                         << std::endl;
                 std::cin >> response;
 
@@ -165,10 +167,11 @@ int main(int argc, char **argv) {
         } else if (exchange == "bybit") {
             if (outputDirectoryLowerCase.find("bnb") != std::string::npos ||
                 outputDirectoryLowerCase.find("binance") != std::string::npos ||
-                outputDirectoryLowerCase.find("okx") != std::string::npos) {
+                outputDirectoryLowerCase.find("okx") != std::string::npos ||
+                outputDirectoryLowerCase.find("mexc") != std::string::npos) {
                 std::string response;
                 std::cout
-                        << "Seems that you are trying to save Bybit data into Binance or OKX folder, are you sure? Type y (yes) or n (no)"
+                        << "Seems that you are trying to save Bybit data into another exchange folder, are you sure? Type y (yes) or n (no)"
                         << std::endl;
                 std::cin >> response;
 
@@ -179,10 +182,26 @@ int main(int argc, char **argv) {
         } else if (exchange == "okx") {
             if (outputDirectoryLowerCase.find("bnb") != std::string::npos ||
                 outputDirectoryLowerCase.find("binance") != std::string::npos ||
-                outputDirectoryLowerCase.find("bybit") != std::string::npos) {
+                outputDirectoryLowerCase.find("bybit") != std::string::npos ||
+                outputDirectoryLowerCase.find("mexc") != std::string::npos) {
                 std::string response;
                 std::cout
-                        << "Seems that you are trying to save OKX data into Binance or Bybit folder, are you sure? Type y (yes) or n (no)"
+                        << "Seems that you are trying to save OKX data into another exchange folder, are you sure? Type y (yes) or n (no)"
+                        << std::endl;
+                std::cin >> response;
+
+                if (response != "y") {
+                    return -1;
+                }
+            }
+        } else if (exchange == "mexc") {
+            if (outputDirectoryLowerCase.find("bnb") != std::string::npos ||
+                outputDirectoryLowerCase.find("binance") != std::string::npos ||
+                outputDirectoryLowerCase.find("bybit") != std::string::npos ||
+                outputDirectoryLowerCase.find("okx") != std::string::npos) {
+                std::string response;
+                std::cout
+                        << "Seems that you are trying to save MEXC data into another exchange folder, are you sure? Type y (yes) or n (no)"
                         << std::endl;
                 std::cin >> response;
 
@@ -242,6 +261,11 @@ int main(int argc, char **argv) {
             downloader = std::make_unique<BybitDownloader>(maxJobs, marketCategory, deleteDelistedData);
         } else if (exchange == "okx") {
             downloader = std::make_unique<OKXDownloader>(maxJobs, marketCategory, deleteDelistedData);
+        } else if (exchange == "mexc" && marketCategory == MarketCategory::Futures) {
+            downloader = std::make_unique<MEXCFuturesDownloader>(maxJobs, deleteDelistedData);
+        } else if (exchange == "mexc" && marketCategory == MarketCategory::Spot) {
+            spdlog::error("MEXC Spot downloader is not implemented yet");
+            return -1;
         }
 
         if (dataType == "c") {

@@ -17,12 +17,13 @@ find_package(cxxopts CONFIG REQUIRED)
 add_subdirectory(binance_cpp_api)
 add_subdirectory(bybit_cpp_api)
 add_subdirectory(okx_cpp_api)
+add_subdirectory(mexc_cpp_api)
 
 if (NOT TARGET vk_common)
     add_subdirectory(vk_cpp_common)
 endif ()
 
-include_directories(include vk_cpp_common/include binance_cpp_api/include bybit_cpp_api/include okx_cpp_api/include magic_enum)
+include_directories(include vk_cpp_common/include binance_cpp_api/include bybit_cpp_api/include okx_cpp_api/include mexc_cpp_api/include magic_enum)
 
 set(HEADERS
         include/vk/downloader.h
@@ -31,6 +32,7 @@ set(HEADERS
         include/vk/binance/binance_common.h
         include/vk/bybit/bybit_downloader.h
         include/vk/okx/okx_downloader.h
+        include/vk/mexc/mexc_futures_downloader.h
 )
 
 set(SOURCES
@@ -39,7 +41,8 @@ set(SOURCES
         src/bybit_downloader.cpp
         src/okx_downloader.cpp
         src/binance_common.cpp
+        src/mexc_futures_downloader.cpp
 )
 
 add_executable(crypto_data_downloader main.cpp ${SOURCES} ${HEADERS})
-target_link_libraries(crypto_data_downloader PRIVATE spdlog::spdlog_header_only binance_api bybit_api okx_api)
+target_link_libraries(crypto_data_downloader PRIVATE spdlog::spdlog_header_only binance_api bybit_api okx_api mexc_api)
