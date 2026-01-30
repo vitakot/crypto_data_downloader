@@ -336,8 +336,8 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                                      const onSymbolsToUpdate &onSymbolsToUpdateCB,
                                      const onSymbolCompleted &onSymbolCompletedCB,
                                      const bool convertToT6) const {
-    auto okxBarSize = BarSize::_1m;
 
+    auto okxBarSize = BarSize::_1m;
 
     const auto barSizeInMinutes = static_cast<std::underlying_type_t<CandleInterval>>(candleInterval) / 60;
 
@@ -347,7 +347,7 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
 
     // Market data history endpoint only supports 1-minute candles
     if (okxBarSize != BarSize::_1m) {
-        throw std::invalid_argument("OKX market data history only supports 1-minute candles");
+        throw std::invalid_argument("OKX market data history only supports 1-minute candles, you must aggregate to higher time frames manually");
     }
 
     std::vector<std::future<std::filesystem::path> > futures;
@@ -562,6 +562,33 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                                    }
 
                                    currentStart = currentEnd;
+                               }
+
+                               // Fill the gap between last downloaded file and now using REST API
+                               // The file-based endpoint only has complete days, so recent data needs REST API
+                               if (lastSavedTimestamp < nowTimestamp) {
+                                   auto recentCandles = m_p->okxClient->getHistoricalPrices(
+                                       symbol, BarSize::_1m, lastSavedTimestamp, nowTimestamp);
+
+                                   if (!recentCandles.empty()) {
+                                       // Sort by timestamp (API returns newest first)
+                                       std::ranges::sort(recentCandles, [](const Candle &a, const Candle &b) {
+                                           return a.ts < b.ts;
+                                       });
+
+                                       // Filter out candles we already have
+                                       std::vector<Candle> newCandles;
+                                       for (const auto &candle : recentCandles) {
+                                           if (candle.ts > lastSavedTimestamp) {
+                                               newCandles.push_back(candle);
+                                           }
+                                       }
+
+                                       if (!newCandles.empty()) {
+                                           P::writeCandlesToCSVFile(newCandles, symbolFilePathCsv.string(), false);
+                                           totalNewCandles += static_cast<int64_t>(newCandles.size());
+                                       }
+                                   }
                                }
 
                                if (totalNewCandles > 0) {
