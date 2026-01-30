@@ -10,3 +10,6 @@
 [submodule "vk_cpp_common"]
 	path = vk_cpp_common
 	url = git@github.com:vitakot/vk_cpp_common.git
+[submodule "mexc_cpp_api"]
+	path = mexc_cpp_api
+	url = git@github.com:vitakot/mexc_cpp_api.git
