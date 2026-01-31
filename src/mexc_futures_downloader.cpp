@@ -56,6 +56,9 @@ struct MEXCFuturesDownloader::P {
 
     static bool writeFundingRatesToCSVFile(const std::vector<FundingRate> &fr, const std::string &path);
 
+    static bool writeHistoricalFundingRatesToCSVFile(const std::vector<HistoricalFundingRate> &fr,
+                                                       const std::string &path);
+
     static mexc::CandleInterval vkIntervalToMexcInterval(vk::CandleInterval interval);
 };
 
@@ -120,8 +123,8 @@ int64_t MEXCFuturesDownloader::P::checkSymbolCSVFile(const std::string &path) {
                     return oldestDate;
                 }
                 ifs.close();
-                // Return timestamp + interval duration to get next expected candle
-                return std::stoll(records[0]) + 60000; // Assuming 1m candles, adjust if needed
+                // Return timestamp of last candle (backward pagination will handle the rest)
+                return std::stoll(records[0]);
             }
         } else {
             row.push_back(c);
@@ -243,11 +246,11 @@ bool MEXCFuturesDownloader::P::mergeTempFilesToCSV(const std::string &tempDir, c
 
     ofs.close();
 
-    // Try to remove temp directory (will only succeed if empty)
+    // Remove temp directory and all its contents
     try {
-        std::filesystem::remove(tempDir);
-    } catch (...) {
-        // Ignore errors - directory might not be empty
+        std::filesystem::remove_all(tempDir);
+    } catch (const std::exception &e) {
+        spdlog::warn(fmt::format("Failed to remove temp directory {}: {}", tempDir, e.what()));
     }
 
     spdlog::info(fmt::format("Merged {} batches for symbol: {}", batchCount, symbol));
@@ -278,9 +281,9 @@ int MEXCFuturesDownloader::P::recoverAndMergeTempFiles(const std::string &tempDi
     }
 
     if (maxBatchNum == 0) {
-        // No valid batch files found, clean up empty directory
+        // No valid batch files found, clean up directory
         try {
-            std::filesystem::remove(tempDir);
+            std::filesystem::remove_all(tempDir);
         } catch (...) {}
         return 0;
     }
@@ -374,6 +377,39 @@ bool MEXCFuturesDownloader::P::writeFundingRatesToCSVFile(const std::vector<Fund
     return true;
 }
 
+bool MEXCFuturesDownloader::P::writeHistoricalFundingRatesToCSVFile(const std::vector<HistoricalFundingRate> &fr,
+                                                                      const std::string &path) {
+    const std::filesystem::path pathToCSVFile{path};
+
+    std::ofstream ofs;
+    ofs.open(pathToCSVFile.string(), std::ios::app);
+
+    if (!ofs.is_open()) {
+        spdlog::error(fmt::format("Couldn't open file: {}", path));
+        return false;
+    }
+
+    uint64_t fileSize;
+
+    try {
+        fileSize = std::filesystem::file_size(pathToCSVFile.string());
+    } catch (const std::filesystem::filesystem_error &) {
+        fileSize = 0;
+    }
+
+    if (fileSize == 0) {
+        ofs << "funding_time,funding_rate" << std::endl;
+    }
+
+    for (const auto &record: fr) {
+        ofs << record.settleTime << ",";
+        ofs << record.fundingRate << std::endl;
+    }
+
+    ofs.close();
+    return true;
+}
+
 MEXCFuturesDownloader::MEXCFuturesDownloader(std::uint32_t maxJobs, bool deleteDelistedData)
     : m_p(std::make_unique<P>(maxJobs, deleteDelistedData)) {
 }
@@ -412,6 +448,30 @@ void MEXCFuturesDownloader::updateMarketData(const std::string &dirPath, const s
         onSymbolsToUpdateCB(symbolsToUpdate);
     }
 
+    // Display warning about historical data limits for minute intervals
+    if (barSizeInMinutes <= 30) {
+        spdlog::warn("═══════════════════════════════════════════════════════════════════════");
+        spdlog::warn("MEXC FUTURES API - HISTORICAL DATA LIMITS WARNING");
+        spdlog::warn("═══════════════════════════════════════════════════════════════════════");
+        spdlog::warn("MEXC Futures API has undocumented limits for historical data.");
+        spdlog::warn("Complete history will NOT be downloaded for minute intervals!");
+        spdlog::warn("");
+        spdlog::warn("Available historical data by interval:");
+        spdlog::warn("┌──────────────┬────────────────────────────────────┐");
+        spdlog::warn("│  Interval    │  Available History                 │");
+        spdlog::warn("├──────────────┼────────────────────────────────────┤");
+        spdlog::warn("│     1m       │  ~30 days                          │");
+        spdlog::warn("│     5m       │  ~360 days (~1 year)               │");
+        spdlog::warn("│    15m       │  ~180-365 days                     │");
+        spdlog::warn("│    30m       │  5+ years (complete)               │");
+        spdlog::warn("│     1h       │  5+ years (complete)               │");
+        spdlog::warn("│     1d       │  Complete history                  │");
+        spdlog::warn("└──────────────┴────────────────────────────────────┘");
+        spdlog::warn("");
+        spdlog::warn("Current interval: {}m - Limited history available!", barSizeInMinutes);
+        spdlog::warn("═══════════════════════════════════════════════════════════════════════");
+    }
+
     for (const auto &s: symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
@@ -435,7 +495,13 @@ void MEXCFuturesDownloader::updateMarketData(const std::string &dirPath, const s
 
                            // MEXC futures API uses timestamps in SECONDS
                            auto nowTimestamp = std::chrono::seconds(std::time(nullptr)).count();
-                           nowTimestamp = nowTimestamp - 60; // Don't download incomplete candle
+
+                           // Calculate interval in seconds and round down to last COMPLETED candle
+                           // Example for 1h: if now is 10:34, current candle is 10:00, last completed is 09:00
+                           // We use this as END time for API (which is inclusive), so 09:00 is the last candle we download
+                           const int64_t intervalSeconds = barSizeInMinutes * 60;
+                           const int64_t alignedNow = (nowTimestamp / intervalSeconds) * intervalSeconds;
+                           nowTimestamp = alignedNow - intervalSeconds;
 
                            spdlog::info(fmt::format("Updating candles for symbol: {}...", symbol));
 
@@ -454,7 +520,68 @@ void MEXCFuturesDownloader::updateMarketData(const std::string &dirPath, const s
 
                                // Re-check the CSV file for last timestamp (may have changed after recovery)
                                const int64_t recoveredFromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
-                               const int64_t actualFromTimeSec = recoveredFromTimeStamp / 1000;
+                               const int64_t recoveredFromTimeSec = recoveredFromTimeStamp / 1000;
+
+                               // Determine where to start downloading from
+                               int64_t actualFromTimeSec;
+
+
+                               if (recoveredFromTimeSec > nowTimestamp) {
+                                   // CSV has incomplete/future candle (from buggy old download)
+                                   // Start from nowTimestamp to re-download properly
+                                   spdlog::warn(fmt::format("Symbol {}: CSV has future candle at {}, re-downloading from {}",
+                                                           symbol, recoveredFromTimeSec, nowTimestamp));
+                                   actualFromTimeSec = fromTimeSec;  // Use original fromTimeSec to re-download
+                               } else if (recoveredFromTimeSec == nowTimestamp) {
+                                   // Last CSV candle equals last completed candle, no new data
+                                   spdlog::info(fmt::format("No new candles for symbol: {}", symbol));
+                                   // Clean up temp directory
+                                   try {
+                                       std::filesystem::remove_all(tempDir.string());
+                                   } catch (const std::exception &e) {
+                                       spdlog::warn(fmt::format("Failed to remove temp directory {}: {}", tempDir.string(), e.what()));
+                                   }
+
+                                   if (onSymbolCompletedCB) {
+                                       onSymbolCompletedCB(symbol);
+                                   }
+
+                                   if (std::filesystem::exists(symbolFilePathCsv)) {
+                                       return symbolFilePathCsv;
+                                   }
+                                   return "";
+                               } else {
+                                   // Normal case: download from next candle after last CSV candle
+                                   actualFromTimeSec = recoveredFromTimeSec + intervalSeconds;
+
+                                   // Check if we have an inverted range (no new candles)
+                                   if (actualFromTimeSec > nowTimestamp) {
+                                       spdlog::info(fmt::format("No new candles for symbol: {}", symbol));
+                                       // Clean up temp directory
+                                       try {
+                                           std::filesystem::remove_all(tempDir.string());
+                                       } catch (const std::exception &e) {
+                                           spdlog::warn(fmt::format("Failed to remove temp directory {}: {}", tempDir.string(), e.what()));
+                                       }
+
+                                       if (onSymbolCompletedCB) {
+                                           onSymbolCompletedCB(symbol);
+                                       }
+
+                                       if (std::filesystem::exists(symbolFilePathCsv)) {
+                                           return symbolFilePathCsv;
+                                       }
+                                       return "";
+                                   }
+                               }
+
+                               // If actualFromTimeSec == nowTimestamp, we need to extend the range by 1 second
+                               // to ensure MEXC API returns the candle (API doesn't handle startTime == endTime well)
+                               int64_t apiEndTime = nowTimestamp;
+                               if (actualFromTimeSec == nowTimestamp) {
+                                   apiEndTime = nowTimestamp + 1;
+                               }
+
 
                                // Create temp directory for new batches
                                if (const auto err = createDirectoryRecursively(tempDir.string())) {
@@ -474,7 +601,7 @@ void MEXCFuturesDownloader::updateMarketData(const std::string &dirPath, const s
 
                                // Progressive saving: accumulate batches, write periodically
                                std::ignore = m_p->mexcFuturesClient->getHistoricalPrices(
-                                   symbol, mexcCandleInterval, actualFromTimeSec, nowTimestamp,
+                                   symbol, mexcCandleInterval, actualFromTimeSec, apiEndTime,
                                    [&tempDir, &symbol, &tempFileCounter, &apiBatchCounter, &accumulatedCandles, apiBatchesPerTempFile](const std::vector<Candle> &cnd) {
                                        if (!cnd.empty()) {
                                            apiBatchCounter++;
@@ -520,6 +647,12 @@ void MEXCFuturesDownloader::updateMarketData(const std::string &dirPath, const s
                                    }
                                } else {
                                    spdlog::info(fmt::format("No new candles for symbol: {}", symbol));
+                                   // Clean up temp directory even when no new data
+                                   try {
+                                       std::filesystem::remove_all(tempDir.string());
+                                   } catch (const std::exception &e) {
+                                       spdlog::warn(fmt::format("Failed to remove temp directory {}: {}", tempDir.string(), e.what()));
+                                   }
                                }
 
                                if (onSymbolCompletedCB) {
@@ -592,28 +725,67 @@ void MEXCFuturesDownloader::updateFundingRateData(const std::string &dirPath,
                                              frDir.string(), err.value()));
     }
 
-    // MEXC returns current funding rates for all symbols in one call
-    // We'll save each symbol's current funding rate to its file
-    for (const auto &fr: fundingRates) {
-        if (std::ranges::find(symbolsToUpdate, fr.symbol) == symbolsToUpdate.end()) {
-            continue;
-        }
+    // Download complete funding rate history for each symbol
+    for (const auto &symbol: symbolsToUpdate) {
+        spdlog::info(fmt::format("Downloading funding rate history for symbol: {}...", symbol));
 
         std::filesystem::path symbolFilePathCsv = frDir;
-        symbolFilePathCsv.append(fr.symbol + "_fr.csv");
+        symbolFilePathCsv.append(symbol + "_fr.csv");
 
         const int64_t lastTimestamp = P::checkFundingRatesCSVFile(symbolFilePathCsv.string());
 
-        // Only append if this is a new funding rate
-        if (fr.timestamp > lastTimestamp) {
-            std::vector<FundingRate> frVec{fr};
-            if (P::writeFundingRatesToCSVFile(frVec, symbolFilePathCsv.string())) {
-                spdlog::info(fmt::format("Funding rate for symbol: {} updated", fr.symbol));
+        try {
+            std::vector<HistoricalFundingRate> newRates;
+            int32_t currentPage = 1;
+            const int32_t pageSize = 1000; // MEXC API supports up to 1000 records per page
+            bool hasMoreData = true;
+
+            // Download all pages until we reach data we already have or no more data
+            while (hasMoreData) {
+                auto response = m_p->mexcFuturesClient->getContractFundingRateHistory(symbol, currentPage, pageSize);
+
+                if (response.resultList.empty()) {
+                    break;
+                }
+
+                // Check if we've reached data we already have
+                bool foundOldData = false;
+                for (const auto &rate : response.resultList) {
+                    if (rate.settleTime <= lastTimestamp) {
+                        foundOldData = true;
+                        break;
+                    }
+                    newRates.push_back(rate);
+                }
+
+                if (foundOldData || currentPage >= response.totalPage) {
+                    hasMoreData = false;
+                } else {
+                    currentPage++;
+                }
+
+                spdlog::info(fmt::format("Symbol {}: downloaded page {}/{}, {} new rates so far",
+                                        symbol, currentPage - 1, response.totalPage, newRates.size()));
             }
+
+            // Write new rates to CSV (they come in reverse chronological order, newest first)
+            if (!newRates.empty()) {
+                // Reverse to write in chronological order (oldest first)
+                std::ranges::reverse(newRates);
+
+                if (P::writeHistoricalFundingRatesToCSVFile(newRates, symbolFilePathCsv.string())) {
+                    spdlog::info(fmt::format("Symbol {}: saved {} funding rates to CSV", symbol, newRates.size()));
+                }
+            } else {
+                spdlog::info(fmt::format("Symbol {}: no new funding rates", symbol));
+            }
+
+        } catch (const std::exception &e) {
+            spdlog::warn(fmt::format("Failed to download funding rates for symbol: {}, reason: {}", symbol, e.what()));
         }
 
         if (onSymbolCompletedCB) {
-            onSymbolCompletedCB(fr.symbol);
+            onSymbolCompletedCB(symbol);
         }
     }
 }

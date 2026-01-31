@@ -33,6 +33,7 @@ set(HEADERS
         include/vk/bybit/bybit_downloader.h
         include/vk/okx/okx_downloader.h
         include/vk/mexc/mexc_futures_downloader.h
+        include/vk/mexc/mexc_spot_downloader.h
 )
 
 set(SOURCES
@@ -42,6 +43,7 @@ set(SOURCES
         src/okx_downloader.cpp
         src/binance_common.cpp
         src/mexc_futures_downloader.cpp
+        src/mexc_spot_downloader.cpp
 )
 
 add_executable(crypto_data_downloader main.cpp ${SOURCES} ${HEADERS})

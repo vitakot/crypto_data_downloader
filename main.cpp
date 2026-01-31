@@ -10,6 +10,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include "vk/bybit/bybit_downloader.h"
 #include "vk/okx/okx_downloader.h"
 #include "vk/mexc/mexc_futures_downloader.h"
+#include "vk/mexc/mexc_spot_downloader.h"
 #include "vk/downloader.h"
 #include "vk/binance/binance_spot_downloader.h"
 #include <spdlog/spdlog.h>
@@ -264,8 +265,7 @@ int main(int argc, char **argv) {
         } else if (exchange == "mexc" && marketCategory == MarketCategory::Futures) {
             downloader = std::make_unique<MEXCFuturesDownloader>(maxJobs, deleteDelistedData);
         } else if (exchange == "mexc" && marketCategory == MarketCategory::Spot) {
-            spdlog::error("MEXC Spot downloader is not implemented yet");
-            return -1;
+            downloader = std::make_unique<MEXCSpotDownloader>(maxJobs, deleteDelistedData);
         }
 
         if (dataType == "c") {
