@@ -25,7 +25,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 
 #undef max
 
-#define VERSION "2.1.8"
+#define VERSION "2.1.9"
 
 using namespace vk;
 
