@@ -489,8 +489,14 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                                int64_t totalNewCandles = 0;
                                int64_t lastSavedTimestamp = fromTimeStamp;
 
+                               spdlog::info(fmt::format("Starting download for {}: fromTimeStamp={}, instrumentListTime={}, instFamilyOrId={}",
+                                   symbol, fromTimeStamp, instrumentListTime, instFamilyOrId));
+
                                while (currentStart < nowTimestamp) {
                                    int64_t currentEnd = std::min(currentStart + maxDailyRangeMs, nowTimestamp);
+
+                                   spdlog::info(fmt::format("Fetching market data history for {}: range {} - {}",
+                                       symbol, currentStart, currentEnd));
 
                                    // Get list of files for this date range
                                    const auto history = m_p->okxClient->getMarketDataHistory(
@@ -502,9 +508,14 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                                        currentEnd);
 
                                    if (history.details.empty()) {
+                                       spdlog::info(fmt::format("No market data history files for {} in range {} - {}",
+                                           symbol, currentStart, currentEnd));
                                        currentStart = currentEnd;
                                        continue;
                                    }
+
+                                   spdlog::info(fmt::format("Found {} detail groups for {}",
+                                       history.details.size(), symbol));
 
                                    // Collect all files and sort by date (oldest first)
                                    std::vector<MarketDataFileInfo> allFiles;
