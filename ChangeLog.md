@@ -35,3 +35,7 @@ All notable changes to this project will be documented in this file. This projec
 - Add OKX Spot support
 - Fix in Bybit candles
 - Add/Improve rate limiters
+
+## [2.1.9](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.5) (2026-01-31)
+- Add MEXC support
+- Many fixes I don't remember

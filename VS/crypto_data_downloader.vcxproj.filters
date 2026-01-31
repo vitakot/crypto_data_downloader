@@ -25,6 +25,9 @@
     <Filter Include="okx_api">
       <UniqueIdentifier>{259ac01a-2108-4cf7-af85-f7159eee4234}</UniqueIdentifier>
     </Filter>
+    <Filter Include="mexc_api">
+      <UniqueIdentifier>{c6b58430-93ac-4d57-bd12-e651f559e980}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -104,15 +107,6 @@
     <ClCompile Include="..\okx_cpp_api\src\okx_event_models.cpp">
       <Filter>okx_api</Filter>
     </ClCompile>
-    <ClCompile Include="..\okx_cpp_api\src\okx_futures_rest_client.cpp">
-      <Filter>okx_api</Filter>
-    </ClCompile>
-    <ClCompile Include="..\okx_cpp_api\src\okx_futures_ws_client.cpp">
-      <Filter>okx_api</Filter>
-    </ClCompile>
-    <ClCompile Include="..\okx_cpp_api\src\okx_futures_ws_session.cpp">
-      <Filter>okx_api</Filter>
-    </ClCompile>
     <ClCompile Include="..\okx_cpp_api\src\okx_http_session.cpp">
       <Filter>okx_api</Filter>
     </ClCompile>
@@ -137,11 +131,59 @@
     <ClCompile Include="..\src\okx_downloader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\postgres_connector.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\main.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\okx_cpp_api\src\okx_rest_client.cpp">
+      <Filter>okx_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\okx_cpp_api\src\okx_ws_client.cpp">
+      <Filter>okx_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\okx_cpp_api\src\okx_ws_session.cpp">
+      <Filter>okx_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mexc_cpp_api\src\mexc.cpp">
+      <Filter>mexc_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mexc_cpp_api\src\mexc_event_models.cpp">
+      <Filter>mexc_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mexc_cpp_api\src\mexc_futures_exchange_connector.cpp">
+      <Filter>mexc_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mexc_cpp_api\src\mexc_futures_rest_client.cpp">
+      <Filter>mexc_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mexc_cpp_api\src\mexc_futures_ws_client.cpp">
+      <Filter>mexc_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mexc_cpp_api\src\mexc_futures_ws_session.cpp">
+      <Filter>mexc_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mexc_cpp_api\src\mexc_http_futures_session.cpp">
+      <Filter>mexc_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mexc_cpp_api\src\mexc_http_spot_session.cpp">
+      <Filter>mexc_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mexc_cpp_api\src\mexc_models.cpp">
+      <Filter>mexc_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mexc_cpp_api\src\mexc_spot_rest_client.cpp">
+      <Filter>mexc_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mexc_cpp_api\src\mexc_ws_stream_manager.cpp">
+      <Filter>mexc_api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\mexc_futures_downloader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\mexc_spot_downloader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\okx_cpp_api\src\okx_market_data_utils.cpp">
+      <Filter>okx_api</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
