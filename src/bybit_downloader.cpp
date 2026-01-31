@@ -36,7 +36,7 @@ struct BybitDownloader::P {
 
     static int64_t checkSymbolCSVFile(const std::string &path);
 
-    static bool writeCandlesToCSVFile(const std::vector<Candle> &candles, const std::string &path);
+    static bool writeCandlesToCSVFile(const std::vector<Candle> &candles, const std::string &path, std::int64_t lastTs);
 
     static bool readCandlesFromCSVFile(const std::string &path, std::vector<Candle> &candles);
 
@@ -153,7 +153,7 @@ void BybitDownloader::P::convertFromCSVToT6(const std::vector<std::filesystem::p
     } while (readyFutures.size() < futures.size());
 }
 
-bool BybitDownloader::P::writeCandlesToCSVFile(const std::vector<Candle> &candles, const std::string &path) {
+bool BybitDownloader::P::writeCandlesToCSVFile(const std::vector<Candle> &candles, const std::string &path, std::int64_t lastTs) {
     const std::filesystem::path pathToCSVFile{path};
 
     std::ofstream ofs;
@@ -178,6 +178,9 @@ bool BybitDownloader::P::writeCandlesToCSVFile(const std::vector<Candle> &candle
     }
 
     for (const auto &candle: candles) {
+        if (candle.startTime == lastTs) {
+            continue;
+        }
         ofs << candle.startTime << ",";
         ofs << candle.open << ",";
         ofs << candle.high << ",";
@@ -445,9 +448,9 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
                                    symbol,
                                    bybitCandleInterval,
                                    fromTimeStamp + 1000,
-                                   nowTimestamp, 200, [symbolFilePathCsv, symbol](const std::vector<Candle> &cnd) {
+                                   nowTimestamp, 200, [symbolFilePathCsv, symbol, fromTimeStamp](const std::vector<Candle> &cnd) {
                                        if (!cnd.empty()) {
-                                           if (!P::writeCandlesToCSVFile(cnd, symbolFilePathCsv.string())) {
+                                           if (!P::writeCandlesToCSVFile(cnd, symbolFilePathCsv.string(),fromTimeStamp)) {
                                                spdlog::warn(fmt::format("CSV file for symbol: {} update failed", symbol));
                                            }
                                        }
