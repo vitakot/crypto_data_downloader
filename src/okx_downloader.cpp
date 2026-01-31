@@ -391,7 +391,7 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
 
     if (symbolsToUpdate.empty()) {
         for (const auto &el: exchangeInstruments) {
-            if (el.settleCcy == "USDT" || el.quoteCcy == "USD") {
+            if (el.settleCcy == "USDT" || el.quoteCcy == "USDT") {
                 if (el.state == InstrumentStatus::live) {
                     symbolsToUpdate.push_back(el.instId);
                 } else {
