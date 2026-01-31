@@ -538,7 +538,7 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                                        }
 
                                        // Download ZIP file
-                                       const auto zipData = m_p->okxClient->downloadMarketDataFile(fileInfo.url);
+                                       const auto zipData = RESTClient::downloadMarketDataFile(fileInfo.url);
 
                                        // Extract CSV from ZIP
                                        const auto csvData = okx::utils::extractZip(zipData);
@@ -578,10 +578,14 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                                // Fill the gap between last downloaded file and now using REST API
                                // The file-based endpoint only has complete days, so recent data needs REST API
                                if (lastSavedTimestamp < nowTimestamp) {
+
+                                   spdlog::info("Filling the gap between last downloaded file and now time...");
+
                                    auto recentCandles = m_p->okxClient->getHistoricalPrices(
                                        symbol, BarSize::_1m, lastSavedTimestamp, nowTimestamp);
 
                                    if (!recentCandles.empty()) {
+                                       spdlog::info(fmt::format("Found {} missing candles", recentCandles.size()));
                                        // Sort by timestamp (API returns newest first)
                                        std::ranges::sort(recentCandles, [](const Candle &a, const Candle &b) {
                                            return a.ts < b.ts;
@@ -659,14 +663,14 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
 
             if (std::filesystem::exists(symbolFilePathCsv)) {
                 std::filesystem::remove(symbolFilePathCsv);
-                spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol,
-                             symbolFilePathCsv.string());
+                spdlog::info(fmt::format("Removing csv file for delisted symbol: {}, file: {}...", symbol,
+                             symbolFilePathCsv.string()));
             }
 
             if (std::filesystem::exists(symbolFilePathT6)) {
                 std::filesystem::remove(symbolFilePathT6);
-                spdlog::info("Removing t6 file for delisted symbol: {}, file: {}...", symbol,
-                             symbolFilePathT6.string());
+                spdlog::info(fmt::format("Removing t6 file for delisted symbol: {}, file: {}...", symbol,
+                             symbolFilePathT6.string()));
             }
         }
     }

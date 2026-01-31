@@ -8,7 +8,7 @@ A high-performance command-line utility for downloading historical market data (
 
 ## Features
 
-- **Multi-Exchange Support**: Binance, Bybit, and OKX
+- **Multi-Exchange Support**: Binance, Bybit, OKX, and MEXC
 - **Multiple Data Types**: OHLCV candles and funding rate history
 - **Parallel Downloads**: Configurable concurrent job processing
 - **Flexible Output**: CSV format with optional T6 (Zorro) conversion
@@ -24,6 +24,23 @@ A high-performance command-line utility for downloading historical market data (
 | Binance  | ✅ | ✅ | ✅ | ✅ |
 | Bybit    | ✅ | ✅ | ✅ | ✅ |
 | OKX      | ✅ | ✅ | ✅ | ✅ |
+| MEXC     | ✅ | ✅ | ✅ | ✅ |
+
+### Exchange-Specific Notes
+
+#### MEXC Historical Data Limits
+
+MEXC API has **undocumented limits** for historical candlestick data:
+
+| Interval | Spot Available | Futures Available |
+|----------|----------------|-------------------|
+| 1m       | ~30 days       | ~30 days          |
+| 5m       | ~270 days      | ~360 days         |
+| 15m      | ~270 days      | ~180-365 days     |
+| 30m      | ~270 days      | 5+ years          |
+| **1h+**  | **Complete**   | **Complete**      |
+
+> **Recommendation:** Use **1h (hourly)** or larger intervals for complete MEXC historical data.
 
 ## Requirements
 
@@ -116,7 +133,7 @@ crypto_data_downloader [OPTIONS]
 
 | Option | Long Form | Description | Default |
 |--------|-----------|-------------|---------|
-| `-e` | `--exchange` | Exchange: `bnb` (Binance), `bybit`, `okx` | `bnb` |
+| `-e` | `--exchange` | Exchange: `bnb` (Binance), `bybit`, `okx`, `mexc` | `bnb` |
 | `-t` | `--data_type` | Data type: `c` (candles), `fr` (funding rates) | `c` |
 | `-o` | `--output` | Output directory path | *required* |
 | `-s` | `--symbols` | Symbols to download (comma-separated) or `all` | `all` |
@@ -124,7 +141,7 @@ crypto_data_downloader [OPTIONS]
 | `-j` | `--jobs` | Maximum parallel download jobs | auto |
 | `-b` | `--bar_size` | Bar size in minutes (1, 5, 15, 30, 60, etc.) | `1` |
 | `-c` | `--category` | Market category: `f` (futures), `s` (spot) | `f` |
-| `-k` | `--keep_delisted` | Keep delisted symbols data files (default: delete) | - |
+| `-d` | `--delete_delisted` | Delete delisted symbols data files | - |
 | `-z` | `--t6_conversion` | Convert CSV data to T6 format (Zorro Trader format) | - |
 | `-v` | `--version` | Print version and exit | - |
 | `-h` | `--help` | Print help and exit | - |
@@ -151,14 +168,29 @@ crypto_data_downloader [OPTIONS]
 ./crypto_data_downloader -e okx -t fr -o /data/okx
 ```
 
+**Download MEXC futures candles (hourly recommended):**
+```bash
+./crypto_data_downloader -e mexc -c f -b 60 -o /data/mexc
+```
+
+**Download MEXC spot data:**
+```bash
+./crypto_data_downloader -e mexc -c s -b 60 -o /data/mexc_spot
+```
+
+**Download MEXC funding rate history:**
+```bash
+./crypto_data_downloader -e mexc -t fr -o /data/mexc
+```
+
 **Download Binance spot data:**
 ```bash
 ./crypto_data_downloader -e bnb -c s -o /data/binance_spot
 ```
 
-**Keep data for delisted symbols:**
+**Delete data for delisted symbols:**
 ```bash
-./crypto_data_downloader -e bnb -k -o /data/binance
+./crypto_data_downloader -e bnb -d -o /data/binance
 ```
 
 **Download and convert to T6 format (Zorro):**
@@ -166,9 +198,9 @@ crypto_data_downloader [OPTIONS]
 ./crypto_data_downloader -e bnb -z -o /data/binance
 ```
 
-**Combined options (keep delisted + T6 conversion):**
+**Combined options (delete delisted + T6 conversion):**
 ```bash
-./crypto_data_downloader -e bnb -k -z -o /data/binance
+./crypto_data_downloader -e bnb -d -z -o /data/binance
 ```
 
 ## Output Format
@@ -205,11 +237,13 @@ crypto_data_downloader/
 │   ├── binance/          # Binance-specific downloader
 │   ├── bybit/            # Bybit-specific downloader
 │   ├── okx/              # OKX-specific downloader
+│   ├── mexc/             # MEXC-specific downloader
 │   └── downloader.h      # Common utilities
 ├── src/                  # Implementation files
 ├── binance_cpp_api/      # Binance API wrapper (submodule)
 ├── bybit_cpp_api/        # Bybit API wrapper (submodule)
 ├── okx_cpp_api/          # OKX API wrapper (submodule)
+├── mexc_cpp_api/         # MEXC API wrapper (submodule)
 ├── vk_cpp_common/        # Common utilities (submodule)
 ├── CMakeLists.txt        # Build configuration
 └── main.cpp              # Entry point
@@ -241,4 +275,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Disclaimer
 
 This software is for educational and research purposes only. Use at your own risk. The author is not responsible for any financial losses incurred through the use of this software or the data it downloads.
-
