@@ -598,7 +598,7 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
 
                            spdlog::info(fmt::format("Updating FR for symbol: {}...", symbol));
 
-                           const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
+                           const int64_t fromTimeStamp = P::checkFundingRatesCSVFile(symbolFilePathCsv.string());
 
                            try {
                                if (const auto fr = m_p->bybitClient->getFundingRates(
