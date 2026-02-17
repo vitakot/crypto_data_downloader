@@ -15,6 +15,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include "vk/binance/binance.h"
 #include "vk/interface/exchange_enums.h"
 #include <filesystem>
+#include <set>
 #include <spdlog/spdlog.h>
 #include <regex>
 #include <future>
@@ -83,10 +84,38 @@ void BinanceSpotDownloader::updateMarketData(const std::string &dirPath, const s
         }
     }
 
+    // Build set of all known symbols from exchange for filesystem-based delisting detection
+    std::set<std::string> exchangeSymbolSet;
+    for (const auto &el: exchangeInfo.symbols) {
+        exchangeSymbolSet.insert(el.symbol);
+    }
+
     if (symbolsToUpdate.empty()) {
         for (const auto &el: exchangeInfo.symbols) {
-            if (el.status == ContractStatus::TRADING && el.quoteAsset == "USDT") {
-                symbolsToUpdate.push_back(el.symbol);
+            if (el.quoteAsset == "USDT") {
+                if (el.status != ContractStatus::TRADING && m_p->deleteDelistedData) {
+                    symbolsToDelete.push_back(el.symbol);
+                } else {
+                    symbolsToUpdate.push_back(el.symbol);
+                }
+            }
+        }
+
+        // Scan existing CSV files for symbols no longer on the exchange
+        if (m_p->deleteDelistedData) {
+            std::filesystem::path csvDir = finalPath;
+            csvDir.append(CSV_SPOT_DIR);
+            csvDir.append(Downloader::minutesToString(barSizeInMinutes));
+
+            if (std::filesystem::exists(csvDir)) {
+                for (const auto &entry: std::filesystem::directory_iterator(csvDir)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                        const auto stem = entry.path().stem().string();
+                        if (!exchangeSymbolSet.contains(stem)) {
+                            symbolsToDelete.push_back(stem);
+                        }
+                    }
+                }
             }
         }
     } else {
@@ -98,9 +127,16 @@ void BinanceSpotDownloader::updateMarketData(const std::string &dirPath, const s
             });
 
             if (it == exchangeInfo.symbols.end()) {
-                symbolsToDelete.push_back(symbol);
-                spdlog::info(fmt::format(
-                    "Symbol: {} not found on Exchange, probably delisted", symbol));
+                if (m_p->deleteDelistedData) {
+                    symbolsToDelete.push_back(symbol);
+                }
+                spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", symbol));
+            } else if (it->status != ContractStatus::TRADING) {
+                if (m_p->deleteDelistedData) {
+                    symbolsToDelete.push_back(symbol);
+                } else {
+                    tempSymbols.push_back(it->symbol);
+                }
             } else {
                 tempSymbols.push_back(it->symbol);
             }
@@ -215,14 +251,14 @@ void BinanceSpotDownloader::updateMarketData(const std::string &dirPath, const s
 
             if (std::filesystem::exists(symbolFilePathCsv)) {
                 std::filesystem::remove(symbolFilePathCsv);
-                spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol,
-                             symbolFilePathCsv.string());
+                spdlog::info(fmt::format("Removing csv file for delisted symbol: {}, file: {}...", symbol,
+                             symbolFilePathCsv.string()));
             }
 
             if (std::filesystem::exists(symbolFilePathT6)) {
                 std::filesystem::remove(symbolFilePathT6);
-                spdlog::info("Removing t6 file for delisted symbol: {}, file: {}...", symbol,
-                             symbolFilePathT6.string());
+                spdlog::info(fmt::format("Removing t6 file for delisted symbol: {}, file: {}...", symbol,
+                             symbolFilePathT6.string()));
             }
         }
     }

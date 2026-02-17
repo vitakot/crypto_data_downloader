@@ -17,6 +17,7 @@ Copyright (c) 2026 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <fstream>
 #include <spdlog/spdlog.h>
 #include <future>
+#include <set>
 #include <tuple>
 #include <spdlog/fmt/ranges.h>
 
@@ -30,11 +31,8 @@ struct MEXCFuturesDownloader::P {
     Semaphore maxConcurrentDownloadJobs{3};
     bool deleteDelistedData = false;
 
-    explicit P(const std::uint32_t maxJobs, const bool deleteDelistedData)
-        : mexcFuturesClient(std::make_unique<RESTClient>("", "")),
-          maxConcurrentConvertJobs(maxJobs),
-          deleteDelistedData(deleteDelistedData) {
-    }
+    explicit P(const std::uint32_t maxJobs, const bool deleteDelistedData) :
+        mexcFuturesClient(std::make_unique<RESTClient>("", "")), maxConcurrentConvertJobs(maxJobs), deleteDelistedData(deleteDelistedData) {}
 
     static int64_t checkSymbolCSVFile(const std::string &path);
 
@@ -44,48 +42,45 @@ struct MEXCFuturesDownloader::P {
     static bool writeCandlesToTempFile(const std::vector<Candle> &candles, const std::string &path);
 
     // Merge numbered temp files in reverse order and append to main CSV
-    static bool mergeTempFilesToCSV(const std::string &tempDir, int batchCount,
-                                     const std::string &csvPath, const std::string &symbol);
+    static bool mergeTempFilesToCSV(const std::string &tempDir, int batchCount, const std::string &csvPath, const std::string &symbol);
 
     // Check for existing temp files from interrupted download and merge them
     // Returns the number of batches that were merged (0 if none found)
-    static int recoverAndMergeTempFiles(const std::string &tempDir, const std::string &csvPath,
-                                         const std::string &symbol);
+    static int recoverAndMergeTempFiles(const std::string &tempDir, const std::string &csvPath, const std::string &symbol);
 
     static int64_t checkFundingRatesCSVFile(const std::string &path);
 
     static bool writeFundingRatesToCSVFile(const std::vector<FundingRate> &fr, const std::string &path);
 
-    static bool writeHistoricalFundingRatesToCSVFile(const std::vector<HistoricalFundingRate> &fr,
-                                                       const std::string &path);
+    static bool writeHistoricalFundingRatesToCSVFile(const std::vector<HistoricalFundingRate> &fr, const std::string &path);
 
     static mexc::CandleInterval vkIntervalToMexcInterval(vk::CandleInterval interval);
 };
 
-mexc::CandleInterval MEXCFuturesDownloader::P::vkIntervalToMexcInterval(const vk::CandleInterval interval) {
+mexc::CandleInterval MEXCFuturesDownloader::P::vkIntervalToMexcInterval(const CandleInterval interval) {
     switch (interval) {
-    case vk::CandleInterval::_1m:
-        return mexc::CandleInterval::_1m;
-    case vk::CandleInterval::_5m:
-        return mexc::CandleInterval::_5m;
-    case vk::CandleInterval::_15m:
-        return mexc::CandleInterval::_15m;
-    case vk::CandleInterval::_30m:
-        return mexc::CandleInterval::_30m;
-    case vk::CandleInterval::_1h:
-        return mexc::CandleInterval::_60m;
-    case vk::CandleInterval::_4h:
-        return mexc::CandleInterval::_4h;
-    case vk::CandleInterval::_8h:
-        return mexc::CandleInterval::_8h;
-    case vk::CandleInterval::_1d:
-        return mexc::CandleInterval::_1d;
-    case vk::CandleInterval::_1w:
-        return mexc::CandleInterval::_1W;
-    case vk::CandleInterval::_1M:
-        return mexc::CandleInterval::_1M;
-    default:
-        throw std::invalid_argument("Unsupported candle interval for MEXC");
+        case CandleInterval::_1m:
+            return mexc::CandleInterval::_1m;
+        case CandleInterval::_5m:
+            return mexc::CandleInterval::_5m;
+        case CandleInterval::_15m:
+            return mexc::CandleInterval::_15m;
+        case CandleInterval::_30m:
+            return mexc::CandleInterval::_30m;
+        case CandleInterval::_1h:
+            return mexc::CandleInterval::_60m;
+        case CandleInterval::_4h:
+            return mexc::CandleInterval::_4h;
+        case CandleInterval::_8h:
+            return mexc::CandleInterval::_8h;
+        case CandleInterval::_1d:
+            return mexc::CandleInterval::_1d;
+        case CandleInterval::_1w:
+            return mexc::CandleInterval::_1W;
+        case CandleInterval::_1M:
+            return mexc::CandleInterval::_1M;
+        default:
+            throw std::invalid_argument("Unsupported candle interval for MEXC");
     }
 }
 
@@ -194,8 +189,7 @@ bool MEXCFuturesDownloader::P::writeCandlesToTempFile(const std::vector<Candle> 
     return true;
 }
 
-bool MEXCFuturesDownloader::P::mergeTempFilesToCSV(const std::string &tempDir, const int batchCount,
-                                                    const std::string &csvPath, const std::string &symbol) {
+bool MEXCFuturesDownloader::P::mergeTempFilesToCSV(const std::string &tempDir, const int batchCount, const std::string &csvPath, const std::string &symbol) {
     if (batchCount == 0) {
         return true;
     }
@@ -234,8 +228,7 @@ bool MEXCFuturesDownloader::P::mergeTempFilesToCSV(const std::string &tempDir, c
             continue;
         }
 
-        std::ifstream ifs(tempFile.string());
-        if (ifs.is_open()) {
+        if (std::ifstream ifs(tempFile.string()); ifs.is_open()) {
             ofs << ifs.rdbuf();
             ifs.close();
         }
@@ -257,18 +250,16 @@ bool MEXCFuturesDownloader::P::mergeTempFilesToCSV(const std::string &tempDir, c
     return true;
 }
 
-int MEXCFuturesDownloader::P::recoverAndMergeTempFiles(const std::string &tempDir, const std::string &csvPath,
-                                                        const std::string &symbol) {
+int MEXCFuturesDownloader::P::recoverAndMergeTempFiles(const std::string &tempDir, const std::string &csvPath, const std::string &symbol) {
     if (!std::filesystem::exists(tempDir)) {
         return 0;
     }
 
     // Count existing batch files
     int maxBatchNum = 0;
-    for (const auto &entry : std::filesystem::directory_iterator(tempDir)) {
+    for (const auto &entry: std::filesystem::directory_iterator(tempDir)) {
         if (entry.is_regular_file()) {
-            const std::string filename = entry.path().filename().string();
-            if (filename.starts_with("batch_") && filename.ends_with(".tmp")) {
+            if (const std::string filename = entry.path().filename().string(); filename.starts_with("batch_") && filename.ends_with(".tmp")) {
                 // Extract batch number from filename like "batch_00005.tmp"
                 try {
                     const int batchNum = std::stoi(filename.substr(6, 5));
@@ -284,17 +275,16 @@ int MEXCFuturesDownloader::P::recoverAndMergeTempFiles(const std::string &tempDi
         // No valid batch files found, clean up directory
         try {
             std::filesystem::remove_all(tempDir);
-        } catch (...) {}
+        } catch (...) {
+        }
         return 0;
     }
 
-    spdlog::info(fmt::format("Symbol {}: Found {} temp batches from interrupted download, recovering...",
-                             symbol, maxBatchNum));
+    spdlog::info(fmt::format("Symbol {}: Found {} temp batches from interrupted download, recovering...", symbol, maxBatchNum));
 
     // Merge the recovered batches
     if (mergeTempFilesToCSV(tempDir, maxBatchNum, csvPath, symbol)) {
-        spdlog::info(fmt::format("Symbol {}: Successfully recovered {} batches from previous download",
-                                 symbol, maxBatchNum));
+        spdlog::info(fmt::format("Symbol {}: Successfully recovered {} batches from previous download", symbol, maxBatchNum));
         return maxBatchNum;
     }
 
@@ -377,8 +367,7 @@ bool MEXCFuturesDownloader::P::writeFundingRatesToCSVFile(const std::vector<Fund
     return true;
 }
 
-bool MEXCFuturesDownloader::P::writeHistoricalFundingRatesToCSVFile(const std::vector<HistoricalFundingRate> &fr,
-                                                                      const std::string &path) {
+bool MEXCFuturesDownloader::P::writeHistoricalFundingRatesToCSVFile(const std::vector<HistoricalFundingRate> &fr, const std::string &path) {
     const std::filesystem::path pathToCSVFile{path};
 
     std::ofstream ofs;
@@ -410,17 +399,12 @@ bool MEXCFuturesDownloader::P::writeHistoricalFundingRatesToCSVFile(const std::v
     return true;
 }
 
-MEXCFuturesDownloader::MEXCFuturesDownloader(std::uint32_t maxJobs, bool deleteDelistedData)
-    : m_p(std::make_unique<P>(maxJobs, deleteDelistedData)) {
-}
+MEXCFuturesDownloader::MEXCFuturesDownloader(std::uint32_t maxJobs, bool deleteDelistedData) : m_p(std::make_unique<P>(maxJobs, deleteDelistedData)) {}
 
 MEXCFuturesDownloader::~MEXCFuturesDownloader() = default;
 
-void MEXCFuturesDownloader::updateMarketData(const std::string &dirPath, const std::vector<std::string> &symbols,
-                                              CandleInterval candleInterval,
-                                              const onSymbolsToUpdate &onSymbolsToUpdateCB,
-                                              const onSymbolCompleted &onSymbolCompletedCB,
-                                              const bool convertToT6) const {
+void MEXCFuturesDownloader::updateMarketData(const std::string &dirPath, const std::vector<std::string> &symbols, CandleInterval candleInterval,
+                                             const onSymbolsToUpdate &onSymbolsToUpdateCB, const onSymbolCompleted &onSymbolCompletedCB, const bool convertToT6) const {
     const auto mexcCandleInterval = P::vkIntervalToMexcInterval(candleInterval);
     const auto barSizeInMinutes = static_cast<std::underlying_type_t<CandleInterval>>(candleInterval) / 60;
 
@@ -428,20 +412,81 @@ void MEXCFuturesDownloader::updateMarketData(const std::string &dirPath, const s
     const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
     std::vector<std::filesystem::path> csvFilePaths;
+    std::vector<std::string> symbolsToDelete;
 
     spdlog::info(fmt::format("Symbols directory: {}", finalPath.string()));
 
+    // Get all contract details from the exchange
+    const auto contractDetails = m_p->mexcFuturesClient->getContractDetails();
+    std::set<std::string> activeSymbols;
+    std::set<std::string> allSymbols;
+
+    // Helper to detect non-crypto contracts (tokenized stocks, indices, commodities, forex, etc.)
+    auto isTradFiContract = [](const ContractDetail &c) {
+        static const std::vector<std::string> tradFiTags = {"Stock", "stockindex", "Commodities", "Forex"};
+        return std::ranges::any_of(c.conceptPlate, [](const std::string &plate) {
+            return std::ranges::any_of(tradFiTags, [&plate](const std::string &tag) { return plate.find(tag) != std::string::npos; });
+        });
+    };
+
+    for (const auto &contract: contractDetails) {
+        if (contract.symbol.find("USDT") != std::string::npos && !isTradFiContract(contract)) {
+            allSymbols.insert(contract.symbol);
+            if (contract.state == ContractState::Enabled) {
+                activeSymbols.insert(contract.symbol);
+            }
+        }
+    }
+
     if (symbolsToUpdate.empty()) {
         spdlog::info("Updating all symbols");
-        // Get all symbols from funding rates endpoint
-        const auto fundingRates = m_p->mexcFuturesClient->getContractFundingRates();
-        for (const auto &fr: fundingRates) {
-            if (fr.symbol.find("USDT") != std::string::npos) {
-                symbolsToUpdate.push_back(fr.symbol);
+
+        if (m_p->deleteDelistedData) {
+            // Only download active symbols
+            for (const auto &sym: activeSymbols) {
+                symbolsToUpdate.push_back(sym);
+            }
+
+            // Scan existing CSV files for symbols no longer active
+            std::filesystem::path csvDir = finalPath;
+            csvDir.append(CSV_FUT_DIR);
+            csvDir.append(Downloader::minutesToString(barSizeInMinutes));
+
+            if (std::filesystem::exists(csvDir)) {
+                for (const auto &entry: std::filesystem::directory_iterator(csvDir)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                        if (const auto stem = entry.path().stem().string(); !activeSymbols.contains(stem)) {
+                            symbolsToDelete.push_back(stem);
+                        }
+                    }
+                }
+            }
+        } else {
+            // Download all symbols (including delisted) to avoid survivorship bias
+            for (const auto &sym: allSymbols) {
+                symbolsToUpdate.push_back(sym);
             }
         }
     } else {
         spdlog::info(fmt::format("Updating symbols: {}", fmt::join(symbols, ", ")));
+
+        std::vector<std::string> tempSymbols;
+        for (const auto &symbol: symbolsToUpdate) {
+            if (!allSymbols.contains(symbol) && !activeSymbols.contains(symbol)) {
+                if (m_p->deleteDelistedData) {
+                    symbolsToDelete.push_back(symbol);
+                } else {
+                    tempSymbols.push_back(symbol);
+                }
+                spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", symbol));
+            } else if (m_p->deleteDelistedData && !activeSymbols.contains(symbol)) {
+                symbolsToDelete.push_back(symbol);
+                spdlog::info(fmt::format("Symbol: {} is not active (delisted), scheduling for deletion", symbol));
+            } else {
+                tempSymbols.push_back(symbol);
+            }
+        }
+        symbolsToUpdate = tempSymbols;
     }
 
     if (onSymbolsToUpdateCB) {
@@ -468,206 +513,196 @@ void MEXCFuturesDownloader::updateMarketData(const std::string &dirPath, const s
         spdlog::warn("│     1d       │  Complete history                  │");
         spdlog::warn("└──────────────┴────────────────────────────────────┘");
         spdlog::warn("");
-        spdlog::warn("Current interval: {}m - Limited history available!", barSizeInMinutes);
+        spdlog::warn(fmt::format("Current interval: {}m - Limited history available!", barSizeInMinutes));
         spdlog::warn("═══════════════════════════════════════════════════════════════════════");
     }
 
     for (const auto &s: symbolsToUpdate) {
-        futures.push_back(
-            std::async(std::launch::async,
-                       [finalPath, this, &mexcCandleInterval, &barSizeInMinutes, &onSymbolCompletedCB](
-                   const std::string &symbol,
-                   Semaphore &maxJobs) -> std::filesystem::path {
-                           std::scoped_lock w(maxJobs);
-                           std::filesystem::path symbolFilePathCsv = finalPath;
+        futures.push_back(std::async(
+                std::launch::async,
+                [finalPath, this, &mexcCandleInterval, &barSizeInMinutes, &onSymbolCompletedCB](const std::string &symbol, Semaphore &maxJobs) -> std::filesystem::path {
+                    std::scoped_lock w(maxJobs);
+                    std::filesystem::path symbolFilePathCsv = finalPath;
 
-                           symbolFilePathCsv.append(CSV_FUT_DIR);
-                           symbolFilePathCsv.append(Downloader::minutesToString(barSizeInMinutes));
-                           symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
+                    symbolFilePathCsv.append(CSV_FUT_DIR);
+                    symbolFilePathCsv.append(Downloader::minutesToString(barSizeInMinutes));
+                    symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
 
-                           if (const auto err = createDirectoryRecursively(symbolFilePathCsv.string())) {
-                               throw std::runtime_error(fmt::format("Failed to create {}, err: {}",
-                                                                    symbolFilePathCsv.string(),
-                                                                    err.message().c_str()));
-                           }
+                    if (const auto err = createDirectoryRecursively(symbolFilePathCsv.string())) {
+                        throw std::runtime_error(fmt::format("Failed to create {}, err: {}", symbolFilePathCsv.string(), err.message().c_str()));
+                    }
 
-                           symbolFilePathCsv.append(symbol + ".csv");
+                    symbolFilePathCsv.append(symbol + ".csv");
 
-                           // MEXC futures API uses timestamps in SECONDS
-                           auto nowTimestamp = std::chrono::seconds(std::time(nullptr)).count();
+                    // MEXC futures API uses timestamps in SECONDS
+                    auto nowTimestamp = std::chrono::seconds(std::time(nullptr)).count();
 
-                           // Calculate interval in seconds and round down to last COMPLETED candle
-                           // Example for 1h: if now is 10:34, current candle is 10:00, last completed is 09:00
-                           // We use this as END time for API (which is inclusive), so 09:00 is the last candle we download
-                           const int64_t intervalSeconds = barSizeInMinutes * 60;
-                           const int64_t alignedNow = (nowTimestamp / intervalSeconds) * intervalSeconds;
-                           nowTimestamp = alignedNow - intervalSeconds;
+                    // Calculate interval in seconds and round down to last COMPLETED candle
+                    // Example for 1h: if now is 10:34, current candle is 10:00, last completed is 09:00
+                    // We use this as END time for API (which is inclusive), so 09:00 is the last candle we download
+                    const int64_t intervalSeconds = barSizeInMinutes * 60;
+                    const int64_t alignedNow = (nowTimestamp / intervalSeconds) * intervalSeconds;
+                    nowTimestamp = alignedNow - intervalSeconds;
 
-                           spdlog::info(fmt::format("Updating candles for symbol: {}...", symbol));
+                    spdlog::info(fmt::format("Updating candles for symbol: {}...", symbol));
 
-                           const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
-                           // Convert from ms to seconds for MEXC API
-                           const int64_t fromTimeSec = fromTimeStamp / 1000;
+                    const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
+                    // Convert from ms to seconds for MEXC API
+                    const int64_t fromTimeSec = fromTimeStamp / 1000;
 
-                           try {
-                               // Temp directory for this symbol's batches
-                               std::filesystem::path tempDir = symbolFilePathCsv.parent_path();
-                               tempDir.append("temp_" + symbol);
+                    try {
+                        // Temp directory for this symbol's batches
+                        std::filesystem::path tempDir = symbolFilePathCsv.parent_path();
+                        tempDir.append("temp_" + symbol);
 
-                               // RECOVERY: Check for temp files from previous interrupted download
-                               // If found, merge them into the main CSV before continuing
-                               P::recoverAndMergeTempFiles(tempDir.string(), symbolFilePathCsv.string(), symbol);
+                        // RECOVERY: Check for temp files from previous interrupted download
+                        // If found, merge them into the main CSV before continuing
+                        P::recoverAndMergeTempFiles(tempDir.string(), symbolFilePathCsv.string(), symbol);
 
-                               // Re-check the CSV file for last timestamp (may have changed after recovery)
-                               const int64_t recoveredFromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
-                               const int64_t recoveredFromTimeSec = recoveredFromTimeStamp / 1000;
+                        // Re-check the CSV file for last timestamp (may have changed after recovery)
+                        const int64_t recoveredFromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
+                        const int64_t recoveredFromTimeSec = recoveredFromTimeStamp / 1000;
 
-                               // Determine where to start downloading from
-                               int64_t actualFromTimeSec;
+                        // Determine where to start downloading from
+                        int64_t actualFromTimeSec;
 
 
-                               if (recoveredFromTimeSec > nowTimestamp) {
-                                   // CSV has incomplete/future candle (from buggy old download)
-                                   // Start from nowTimestamp to re-download properly
-                                   spdlog::warn(fmt::format("Symbol {}: CSV has future candle at {}, re-downloading from {}",
-                                                           symbol, recoveredFromTimeSec, nowTimestamp));
-                                   actualFromTimeSec = fromTimeSec;  // Use original fromTimeSec to re-download
-                               } else if (recoveredFromTimeSec == nowTimestamp) {
-                                   // Last CSV candle equals last completed candle, no new data
-                                   spdlog::info(fmt::format("No new candles for symbol: {}", symbol));
-                                   // Clean up temp directory
-                                   try {
-                                       std::filesystem::remove_all(tempDir.string());
-                                   } catch (const std::exception &e) {
-                                       spdlog::warn(fmt::format("Failed to remove temp directory {}: {}", tempDir.string(), e.what()));
-                                   }
+                        if (recoveredFromTimeSec > nowTimestamp) {
+                            // CSV has incomplete/future candle (from buggy old download)
+                            // Start from nowTimestamp to re-download properly
+                            spdlog::warn(fmt::format("Symbol {}: CSV has future candle at {}, re-downloading from {}", symbol, recoveredFromTimeSec, nowTimestamp));
+                            actualFromTimeSec = fromTimeSec; // Use original fromTimeSec to re-download
+                        } else if (recoveredFromTimeSec == nowTimestamp) {
+                            // Last CSV candle equals last completed candle, no new data
+                            spdlog::info(fmt::format("No new candles for symbol: {}", symbol));
+                            // Clean up temp directory
+                            try {
+                                std::filesystem::remove_all(tempDir.string());
+                            } catch (const std::exception &e) {
+                                spdlog::warn(fmt::format("Failed to remove temp directory {}: {}", tempDir.string(), e.what()));
+                            }
 
-                                   if (onSymbolCompletedCB) {
-                                       onSymbolCompletedCB(symbol);
-                                   }
+                            if (onSymbolCompletedCB) {
+                                onSymbolCompletedCB(symbol);
+                            }
 
-                                   if (std::filesystem::exists(symbolFilePathCsv)) {
-                                       return symbolFilePathCsv;
-                                   }
-                                   return "";
-                               } else {
-                                   // Normal case: download from next candle after last CSV candle
-                                   actualFromTimeSec = recoveredFromTimeSec + intervalSeconds;
+                            if (std::filesystem::exists(symbolFilePathCsv)) {
+                                return symbolFilePathCsv;
+                            }
+                            return "";
+                        } else {
+                            // Normal case: download from next candle after last CSV candle
+                            actualFromTimeSec = recoveredFromTimeSec + intervalSeconds;
 
-                                   // Check if we have an inverted range (no new candles)
-                                   if (actualFromTimeSec > nowTimestamp) {
-                                       spdlog::info(fmt::format("No new candles for symbol: {}", symbol));
-                                       // Clean up temp directory
-                                       try {
-                                           std::filesystem::remove_all(tempDir.string());
-                                       } catch (const std::exception &e) {
-                                           spdlog::warn(fmt::format("Failed to remove temp directory {}: {}", tempDir.string(), e.what()));
-                                       }
+                            // Check if we have an inverted range (no new candles)
+                            if (actualFromTimeSec > nowTimestamp) {
+                                spdlog::info(fmt::format("No new candles for symbol: {}", symbol));
+                                // Clean up temp directory
+                                try {
+                                    std::filesystem::remove_all(tempDir.string());
+                                } catch (const std::exception &e) {
+                                    spdlog::warn(fmt::format("Failed to remove temp directory {}: {}", tempDir.string(), e.what()));
+                                }
 
-                                       if (onSymbolCompletedCB) {
-                                           onSymbolCompletedCB(symbol);
-                                       }
+                                if (onSymbolCompletedCB) {
+                                    onSymbolCompletedCB(symbol);
+                                }
 
-                                       if (std::filesystem::exists(symbolFilePathCsv)) {
-                                           return symbolFilePathCsv;
-                                       }
-                                       return "";
-                                   }
-                               }
+                                if (std::filesystem::exists(symbolFilePathCsv)) {
+                                    return symbolFilePathCsv;
+                                }
+                                return "";
+                            }
+                        }
 
-                               // If actualFromTimeSec == nowTimestamp, we need to extend the range by 1 second
-                               // to ensure MEXC API returns the candle (API doesn't handle startTime == endTime well)
-                               int64_t apiEndTime = nowTimestamp;
-                               if (actualFromTimeSec == nowTimestamp) {
-                                   apiEndTime = nowTimestamp + 1;
-                               }
+                        // If actualFromTimeSec == nowTimestamp, we need to extend the range by 1 second
+                        // to ensure MEXC API returns the candle (API doesn't handle startTime == endTime well)
+                        int64_t apiEndTime = nowTimestamp;
+                        if (actualFromTimeSec == nowTimestamp) {
+                            apiEndTime = nowTimestamp + 1;
+                        }
 
 
-                               // Create temp directory for new batches
-                               if (const auto err = createDirectoryRecursively(tempDir.string())) {
-                                   throw std::runtime_error(fmt::format("Failed to create temp dir {}, err: {}",
-                                                                        tempDir.string(), err.message().c_str()));
-                               }
+                        // Create temp directory for new batches
+                        if (const auto err = createDirectoryRecursively(tempDir.string())) {
+                            throw std::runtime_error(fmt::format("Failed to create temp dir {}, err: {}", tempDir.string(), err.message().c_str()));
+                        }
 
-                               // Batch counter - batches arrive in reverse chronological order
-                               // Batch 1 = newest, Batch N = oldest
-                               int tempFileCounter = 0;
-                               int apiBatchCounter = 0;
+                        // Batch counter - batches arrive in reverse chronological order
+                        // Batch 1 = newest, Batch N = oldest
+                        int tempFileCounter = 0;
+                        int apiBatchCounter = 0;
 
-                               // Accumulate multiple API batches before writing to temp file
-                               // This reduces disk I/O while still providing crash recovery
-                               const int apiBatchesPerTempFile = 10;
-                               std::vector<Candle> accumulatedCandles;
+                        // Accumulate multiple API batches before writing to temp file
+                        // This reduces disk I/O while still providing crash recovery
+                        constexpr int apiBatchesPerTempFile = 10;
+                        std::vector<Candle> accumulatedCandles;
 
-                               // Progressive saving: accumulate batches, write periodically
-                               std::ignore = m_p->mexcFuturesClient->getHistoricalPrices(
-                                   symbol, mexcCandleInterval, actualFromTimeSec, apiEndTime,
-                                   [&tempDir, &symbol, &tempFileCounter, &apiBatchCounter, &accumulatedCandles, apiBatchesPerTempFile](const std::vector<Candle> &cnd) {
-                                       if (!cnd.empty()) {
-                                           apiBatchCounter++;
-                                           // Prepend new candles (they are older than what we have)
-                                           accumulatedCandles.insert(accumulatedCandles.begin(), cnd.begin(), cnd.end());
+                        // Progressive saving: accumulate batches, write periodically
+                        std::ignore = m_p->mexcFuturesClient->getHistoricalPrices(
+                                symbol, mexcCandleInterval, actualFromTimeSec, apiEndTime,
+                                [&tempDir, &symbol, &tempFileCounter, &apiBatchCounter, &accumulatedCandles, apiBatchesPerTempFile](const std::vector<Candle> &cnd) {
+                                    if (!cnd.empty()) {
+                                        apiBatchCounter++;
+                                        // Prepend new candles (they are older than what we have)
+                                        accumulatedCandles.insert(accumulatedCandles.begin(), cnd.begin(), cnd.end());
 
-                                           // Write to temp file every N API batches
-                                           if (apiBatchCounter % apiBatchesPerTempFile == 0) {
-                                               tempFileCounter++;
-                                               std::filesystem::path tempFile = tempDir;
-                                               tempFile.append(fmt::format("batch_{:05d}.tmp", tempFileCounter));
+                                        // Write to temp file every N API batches
+                                        if (apiBatchCounter % apiBatchesPerTempFile == 0) {
+                                            tempFileCounter++;
+                                            std::filesystem::path tempFile = tempDir;
+                                            tempFile.append(fmt::format("batch_{:05d}.tmp", tempFileCounter));
 
-                                               if (P::writeCandlesToTempFile(accumulatedCandles, tempFile.string())) {
-                                                   spdlog::info(fmt::format("Symbol {}: saved temp file {} ({} candles from {} API batches)",
-                                                                            symbol, tempFileCounter, accumulatedCandles.size(), apiBatchesPerTempFile));
-                                               } else {
-                                                   spdlog::warn(fmt::format("Symbol {}: failed to save temp file {}",
-                                                                            symbol, tempFileCounter));
-                                               }
-                                               accumulatedCandles.clear();
-                                           }
-                                       }
-                                   });
+                                            if (P::writeCandlesToTempFile(accumulatedCandles, tempFile.string())) {
+                                                spdlog::info(fmt::format("Symbol {}: saved temp file {} ({} candles from {} API batches)", symbol, tempFileCounter,
+                                                                         accumulatedCandles.size(), apiBatchesPerTempFile));
+                                            } else {
+                                                spdlog::warn(fmt::format("Symbol {}: failed to save temp file {}", symbol, tempFileCounter));
+                                            }
+                                            accumulatedCandles.clear();
+                                        }
+                                    }
+                                });
 
-                               // Write any remaining accumulated candles
-                               if (!accumulatedCandles.empty()) {
-                                   tempFileCounter++;
-                                   std::filesystem::path tempFile = tempDir;
-                                   tempFile.append(fmt::format("batch_{:05d}.tmp", tempFileCounter));
+                        // Write any remaining accumulated candles
+                        if (!accumulatedCandles.empty()) {
+                            tempFileCounter++;
+                            std::filesystem::path tempFile = tempDir;
+                            tempFile.append(fmt::format("batch_{:05d}.tmp", tempFileCounter));
 
-                                   if (P::writeCandlesToTempFile(accumulatedCandles, tempFile.string())) {
-                                       spdlog::info(fmt::format("Symbol {}: saved final temp file {} ({} candles)",
-                                                                symbol, tempFileCounter, accumulatedCandles.size()));
-                                   }
-                               }
+                            if (P::writeCandlesToTempFile(accumulatedCandles, tempFile.string())) {
+                                spdlog::info(fmt::format("Symbol {}: saved final temp file {} ({} candles)", symbol, tempFileCounter, accumulatedCandles.size()));
+                            }
+                        }
 
-                               // Merge all temp files to main CSV (in reverse order for chronological result)
-                               if (tempFileCounter > 0) {
-                                   if (P::mergeTempFilesToCSV(tempDir.string(), tempFileCounter,
-                                                              symbolFilePathCsv.string(), symbol)) {
-                                       spdlog::info(fmt::format("CSV file for symbol: {} updated ({} API batches in {} temp files)",
-                                                                symbol, apiBatchCounter, tempFileCounter));
-                                   }
-                               } else {
-                                   spdlog::info(fmt::format("No new candles for symbol: {}", symbol));
-                                   // Clean up temp directory even when no new data
-                                   try {
-                                       std::filesystem::remove_all(tempDir.string());
-                                   } catch (const std::exception &e) {
-                                       spdlog::warn(fmt::format("Failed to remove temp directory {}: {}", tempDir.string(), e.what()));
-                                   }
-                               }
+                        // Merge all temp files to main CSV (in reverse order for chronological result)
+                        if (tempFileCounter > 0) {
+                            if (P::mergeTempFilesToCSV(tempDir.string(), tempFileCounter, symbolFilePathCsv.string(), symbol)) {
+                                spdlog::info(fmt::format("CSV file for symbol: {} updated ({} API batches in {} temp files)", symbol, apiBatchCounter, tempFileCounter));
+                            }
+                        } else {
+                            spdlog::info(fmt::format("No new candles for symbol: {}", symbol));
+                            // Clean up temp directory even when no new data
+                            try {
+                                std::filesystem::remove_all(tempDir.string());
+                            } catch (const std::exception &e) {
+                                spdlog::warn(fmt::format("Failed to remove temp directory {}: {}", tempDir.string(), e.what()));
+                            }
+                        }
 
-                               if (onSymbolCompletedCB) {
-                                   onSymbolCompletedCB(symbol);
-                               }
+                        if (onSymbolCompletedCB) {
+                            onSymbolCompletedCB(symbol);
+                        }
 
-                               if (std::filesystem::exists(symbolFilePathCsv)) {
-                                   return symbolFilePathCsv;
-                               }
-                           } catch (const std::exception &e) {
-                               spdlog::warn(fmt::format("Updating candles for symbol: {} failed, reason: {}",
-                                                        symbol, e.what()));
-                           }
-                           return "";
-                       }, s, std::ref(m_p->maxConcurrentDownloadJobs)));
+                        if (std::filesystem::exists(symbolFilePathCsv)) {
+                            return symbolFilePathCsv;
+                        }
+                    } catch (const std::exception &e) {
+                        spdlog::warn(fmt::format("Updating candles for symbol: {} failed, reason: {}", symbol, e.what()));
+                    }
+                    return "";
+                },
+                s, std::ref(m_p->maxConcurrentDownloadJobs)));
     }
 
     do {
@@ -681,35 +716,108 @@ void MEXCFuturesDownloader::updateMarketData(const std::string &dirPath, const s
     if (convertToT6) {
         spdlog::warn("T6 conversion is not supported for MEXC yet");
     }
+
+    if (m_p->deleteDelistedData) {
+        for (const auto &symbol: symbolsToDelete) {
+            std::filesystem::path symbolFilePathCsv = finalPath;
+            symbolFilePathCsv.append(CSV_FUT_DIR);
+            symbolFilePathCsv.append(Downloader::minutesToString(barSizeInMinutes));
+            symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
+            symbolFilePathCsv.append(symbol + ".csv");
+
+            if (std::filesystem::exists(symbolFilePathCsv)) {
+                std::filesystem::remove(symbolFilePathCsv);
+                spdlog::info(fmt::format("Removing csv file for delisted symbol: {}, file: {}...", symbol, symbolFilePathCsv.string()));
+            }
+        }
+    }
 }
 
-void MEXCFuturesDownloader::updateMarketData(const std::string &connectionString,
-                                              const onSymbolsToUpdate &onSymbolsToUpdateCB,
-                                              const onSymbolCompleted &onSymbolCompletedCB) const {
+void MEXCFuturesDownloader::updateMarketData(const std::string &connectionString, const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                                             const onSymbolCompleted &onSymbolCompletedCB) const {
     throw std::runtime_error("Unimplemented: MEXCFuturesDownloader::updateMarketData()");
 }
 
-void MEXCFuturesDownloader::updateFundingRateData(const std::string &dirPath,
-                                                   const std::vector<std::string> &symbols,
-                                                   const onSymbolsToUpdate &onSymbolsToUpdateCB,
-                                                   const onSymbolCompleted &onSymbolCompletedCB) const {
+void MEXCFuturesDownloader::updateFundingRateData(const std::string &dirPath, const std::vector<std::string> &symbols, const onSymbolsToUpdate &onSymbolsToUpdateCB,
+                                                  const onSymbolCompleted &onSymbolCompletedCB) const {
     const std::filesystem::path finalPath(dirPath);
     std::vector<std::string> symbolsToUpdate = symbols;
+    std::vector<std::string> symbolsToDelete;
 
     spdlog::info(fmt::format("Symbols directory: {}", finalPath.string()));
 
-    // Get current funding rates - this also serves as our symbol list
-    const auto fundingRates = m_p->mexcFuturesClient->getContractFundingRates();
+    // Get all contract details from the exchange
+    const auto contractDetails = m_p->mexcFuturesClient->getContractDetails();
+    std::set<std::string> activeSymbols;
+    std::set<std::string> allSymbols;
+    auto isTradFiContract = [](const ContractDetail &c) {
+        static const std::vector<std::string> tradFiTags = {"Stock", "stockindex", "Commodities", "Forex"};
+        return std::ranges::any_of(c.conceptPlate, [](const std::string &plate) {
+            return std::ranges::any_of(tradFiTags, [&plate](const std::string &tag) { return plate.find(tag) != std::string::npos; });
+        });
+    };
+
+    for (const auto &contract: contractDetails) {
+        if (contract.symbol.find("USDT") != std::string::npos && !isTradFiContract(contract)) {
+            allSymbols.insert(contract.symbol);
+            if (contract.state == ContractState::Enabled) {
+                activeSymbols.insert(contract.symbol);
+            }
+        }
+    }
 
     if (symbolsToUpdate.empty()) {
         spdlog::info("Updating all symbols");
-        for (const auto &fr: fundingRates) {
-            if (fr.symbol.find("USDT") != std::string::npos) {
-                symbolsToUpdate.push_back(fr.symbol);
+
+        if (m_p->deleteDelistedData) {
+            // Only download active symbols
+            for (const auto &sym: activeSymbols) {
+                symbolsToUpdate.push_back(sym);
+            }
+
+            // Scan existing CSV files for symbols no longer active
+            std::filesystem::path frDir = finalPath;
+            frDir.append(CSV_FUT_FR_DIR);
+
+            if (std::filesystem::exists(frDir)) {
+                for (const auto &entry: std::filesystem::directory_iterator(frDir)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                        auto stem = entry.path().stem().string();
+                        if (stem.ends_with("_fr")) {
+                            stem = stem.substr(0, stem.size() - 3);
+                        }
+                        if (!activeSymbols.contains(stem)) {
+                            symbolsToDelete.push_back(stem);
+                        }
+                    }
+                }
+            }
+        } else {
+            // Download all symbols (including delisted) to avoid survivorship bias
+            for (const auto &sym: allSymbols) {
+                symbolsToUpdate.push_back(sym);
             }
         }
     } else {
         spdlog::info(fmt::format("Updating symbols: {}", fmt::join(symbols, ", ")));
+
+        std::vector<std::string> tempSymbols;
+        for (const auto &symbol: symbolsToUpdate) {
+            if (!allSymbols.contains(symbol) && !activeSymbols.contains(symbol)) {
+                if (m_p->deleteDelistedData) {
+                    symbolsToDelete.push_back(symbol);
+                } else {
+                    tempSymbols.push_back(symbol);
+                }
+                spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", symbol));
+            } else if (m_p->deleteDelistedData && !activeSymbols.contains(symbol)) {
+                symbolsToDelete.push_back(symbol);
+                spdlog::info(fmt::format("Symbol: {} is not active (delisted), scheduling for deletion", symbol));
+            } else {
+                tempSymbols.push_back(symbol);
+            }
+        }
+        symbolsToUpdate = tempSymbols;
     }
 
     if (onSymbolsToUpdateCB) {
@@ -721,8 +829,7 @@ void MEXCFuturesDownloader::updateFundingRateData(const std::string &dirPath,
     frDir.append(CSV_FUT_FR_DIR);
 
     if (const auto err = createDirectoryRecursively(frDir.string()); err.value() != 0) {
-        throw std::runtime_error(fmt::format("Failed to create directory: {}, error: {}",
-                                             frDir.string(), err.value()));
+        throw std::runtime_error(fmt::format("Failed to create directory: {}, error: {}", frDir.string(), err.value()));
     }
 
     // Download complete funding rate history for each symbol
@@ -737,11 +844,11 @@ void MEXCFuturesDownloader::updateFundingRateData(const std::string &dirPath,
         try {
             std::vector<HistoricalFundingRate> newRates;
             int32_t currentPage = 1;
-            const int32_t pageSize = 1000; // MEXC API supports up to 1000 records per page
             bool hasMoreData = true;
 
             // Download all pages until we reach data we already have or no more data
             while (hasMoreData) {
+                constexpr int32_t pageSize = 1000;
                 auto response = m_p->mexcFuturesClient->getContractFundingRateHistory(symbol, currentPage, pageSize);
 
                 if (response.resultList.empty()) {
@@ -750,7 +857,7 @@ void MEXCFuturesDownloader::updateFundingRateData(const std::string &dirPath,
 
                 // Check if we've reached data we already have
                 bool foundOldData = false;
-                for (const auto &rate : response.resultList) {
+                for (const auto &rate: response.resultList) {
                     if (rate.settleTime <= lastTimestamp) {
                         foundOldData = true;
                         break;
@@ -764,8 +871,7 @@ void MEXCFuturesDownloader::updateFundingRateData(const std::string &dirPath,
                     currentPage++;
                 }
 
-                spdlog::info(fmt::format("Symbol {}: downloaded page {}/{}, {} new rates so far",
-                                        symbol, currentPage - 1, response.totalPage, newRates.size()));
+                spdlog::info(fmt::format("Symbol {}: downloaded page {}/{}, {} new rates so far", symbol, currentPage - 1, response.totalPage, newRates.size()));
             }
 
             // Write new rates to CSV (they come in reverse chronological order, newest first)
@@ -788,5 +894,19 @@ void MEXCFuturesDownloader::updateFundingRateData(const std::string &dirPath,
             onSymbolCompletedCB(symbol);
         }
     }
+
+    if (m_p->deleteDelistedData) {
+        for (const auto &symbol: symbolsToDelete) {
+            std::filesystem::path symbolFilePathCsv = finalPath;
+            symbolFilePathCsv.append(CSV_FUT_FR_DIR);
+            symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
+            symbolFilePathCsv.append(symbol + "_fr.csv");
+
+            if (std::filesystem::exists(symbolFilePathCsv)) {
+                std::filesystem::remove(symbolFilePathCsv);
+                spdlog::info(fmt::format("Removing csv file for delisted symbol: {}, file: {}...", symbol, symbolFilePathCsv.string()));
+            }
+        }
+    }
 }
-}
+} // namespace vk
