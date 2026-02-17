@@ -126,14 +126,14 @@ int main(int argc, char **argv) {
         }
 
         if (maxJobs >= std::thread::hardware_concurrency()) {
-            spdlog::warn("Number of concurrent jobs is {}, which is too high, system can experience performance issues",
-                         std::thread::hardware_concurrency());
+            spdlog::warn(fmt::format("Number of concurrent jobs is {}, which is too high, system can experience performance issues",
+                         std::thread::hardware_concurrency()));
         }
 
         dataType = parseResult["data_type"].as<std::string>();
 
         if (dataType != "c" && dataType != "fr") {
-            spdlog::error("Wrong value of data_type parameter, must be 'c' or 'fr', is: {}", dataType);
+            spdlog::error(fmt::format("Wrong value of data_type parameter, must be 'c' or 'fr', is: {}", dataType));
             spdlog::info(options.help());
             return -1;
         }
@@ -141,7 +141,7 @@ int main(int argc, char **argv) {
         exchange = parseResult["exchange"].as<std::string>();
 
         if (exchange != "bnb" && exchange != "bybit" && exchange != "okx" && exchange != "mexc") {
-            spdlog::error("Wrong value of exchange parameter, must be 'bnb', 'okx', 'bybit' or 'mexc', is: {}", exchange);
+            spdlog::error(fmt::format("Wrong value of exchange parameter, must be 'bnb', 'okx', 'bybit' or 'mexc', is: {}", exchange));
             spdlog::info(options.help());
             return -1;
         }
@@ -215,7 +215,7 @@ int main(int argc, char **argv) {
         barSizeInMinutes = parseResult["bar_size"].as<int32_t>();
 
         if (dataType != "c" && dataType != "fr") {
-            spdlog::error("Wrong value of data_type parameter, must be 'c' or 'fr', is: {}", dataType);
+            spdlog::error(fmt::format("Wrong value of data_type parameter, must be 'c' or 'fr', is: {}", dataType));
             spdlog::info(options.help());
             return -1;
         }
@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
         const auto category = parseResult["category"].as<std::string>();
 
         if (category != "s" && category != "f") {
-            spdlog::error("Wrong value of category parameter, must be 's' or 'f', is: {}", category);
+            spdlog::error(fmt::format("Wrong value of category parameter, must be 's' or 'f', is: {}", category));
             spdlog::info(options.help());
             return -1;
         }
@@ -245,9 +245,9 @@ int main(int argc, char **argv) {
         std::vector<spdlog::sink_ptr> sinks;
         sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_st>());
         sinks.push_back(std::make_shared<spdlog::sinks::basic_file_sink_st>("crypto_data_downloader.log"));
-        auto combined_logger = std::make_shared<spdlog::logger>("crypto_data_downloader", begin(sinks), end(sinks));
-        register_logger(combined_logger);
-        set_default_logger(combined_logger);
+        auto combinedLogger = std::make_shared<spdlog::logger>("crypto_data_downloader", begin(sinks), end(sinks));
+        register_logger(combinedLogger);
+        set_default_logger(combinedLogger);
         spdlog::flush_on(spdlog::level::info);
 
         std::unique_ptr<IExchangeDownloader> downloader;

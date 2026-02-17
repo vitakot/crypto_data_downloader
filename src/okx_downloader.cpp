@@ -17,6 +17,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <set>
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/ranges.h>
 
@@ -385,17 +386,37 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
 
     // Create a map from instId to Instrument for quick lookup
     std::map<std::string, Instrument> instrumentMap;
+    std::set<std::string> exchangeSymbolSet;
     for (const auto &inst: exchangeInstruments) {
         instrumentMap[inst.instId] = inst;
+        exchangeSymbolSet.insert(inst.instId);
     }
 
     if (symbolsToUpdate.empty()) {
         for (const auto &el: exchangeInstruments) {
             if (el.settleCcy == "USDT" || el.quoteCcy == "USDT") {
-                if (el.state == InstrumentStatus::live) {
-                    symbolsToUpdate.push_back(el.instId);
-                } else {
+                if (el.state != InstrumentStatus::live && m_p->deleteDelistedData) {
                     symbolsToDelete.push_back(el.instId);
+                } else {
+                    symbolsToUpdate.push_back(el.instId);
+                }
+            }
+        }
+
+        // Scan existing CSV files for symbols no longer on the exchange
+        if (m_p->deleteDelistedData) {
+            std::filesystem::path csvDir = finalPath;
+            csvDir.append(csvDirName);
+            csvDir.append(Downloader::minutesToString(barSizeInMinutes));
+
+            if (std::filesystem::exists(csvDir)) {
+                for (const auto &entry: std::filesystem::directory_iterator(csvDir)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                        const auto stem = entry.path().stem().string();
+                        if (!exchangeSymbolSet.contains(stem)) {
+                            symbolsToDelete.push_back(stem);
+                        }
+                    }
                 }
             }
         }
@@ -407,9 +428,19 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                 return i.instId == symbol;
             });
 
-            if (it == exchangeInstruments.end() || it->state != InstrumentStatus::live) {
-                symbolsToDelete.push_back(symbol);
+            if (it == exchangeInstruments.end()) {
+                if (m_p->deleteDelistedData) {
+                    symbolsToDelete.push_back(symbol);
+                } else {
+                    tempSymbols.push_back(symbol);
+                }
                 spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", symbol));
+            } else if (it->state != InstrumentStatus::live) {
+                if (m_p->deleteDelistedData) {
+                    symbolsToDelete.push_back(symbol);
+                } else {
+                    tempSymbols.push_back(it->instId);
+                }
             } else {
                 tempSymbols.push_back(it->instId);
             }
@@ -471,8 +502,20 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                                    instFamilyOrId = it->second.instFamily;
                                }
                            } else {
-                               spdlog::warn(fmt::format("Instrument {} not found in map, skipping", symbol));
-                               return "";
+                               // Instrument not in map (likely delisted), derive instFamily from instId
+                               if (instrumentType == InstrumentType::SPOT) {
+                                   instFamilyOrId = symbol;
+                               } else {
+                                   // E.g. "BTC-USDT-SWAP" -> "BTC-USDT"
+                                   const auto lastDash = symbol.rfind('-');
+                                   if (lastDash != std::string::npos) {
+                                       instFamilyOrId = symbol.substr(0, lastDash);
+                                   } else {
+                                       instFamilyOrId = symbol;
+                                   }
+                               }
+                               spdlog::info(fmt::format("Instrument {} not in map (possibly delisted), using derived instFamily: {}",
+                                                        symbol, instFamilyOrId));
                            }
 
                            // Use instrument listing time if file doesn't exist or has older data
@@ -693,13 +736,39 @@ void OKXDownloader::updateFundingRateData(const std::string &dirPath,
 
     const auto exchangeInstruments = m_p->okxClient->getInstruments(InstrumentType::SWAP);
 
+    // Build set of all known symbols from exchange for filesystem-based delisting detection
+    std::set<std::string> exchangeSymbolSet;
+    for (const auto &el: exchangeInstruments) {
+        exchangeSymbolSet.insert(el.instId);
+    }
+
     if (symbolsToUpdate.empty()) {
         for (const auto &el: exchangeInstruments) {
             if (el.settleCcy == "USDT") {
-                if (el.state == InstrumentStatus::live) {
-                    symbolsToUpdate.push_back(el.instId);
-                } else {
+                if (el.state != InstrumentStatus::live && m_p->deleteDelistedData) {
                     symbolsToDelete.push_back(el.instId);
+                } else {
+                    symbolsToUpdate.push_back(el.instId);
+                }
+            }
+        }
+
+        // Scan existing CSV files for symbols no longer on the exchange
+        if (m_p->deleteDelistedData) {
+            std::filesystem::path frDir = finalPath;
+            frDir.append(CSV_FUT_FR_DIR);
+
+            if (std::filesystem::exists(frDir)) {
+                for (const auto &entry: std::filesystem::directory_iterator(frDir)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                        auto stem = entry.path().stem().string();
+                        if (stem.ends_with("_fr")) {
+                            stem = stem.substr(0, stem.size() - 3);
+                        }
+                        if (!exchangeSymbolSet.contains(stem)) {
+                            symbolsToDelete.push_back(stem);
+                        }
+                    }
                 }
             }
         }
@@ -711,10 +780,20 @@ void OKXDownloader::updateFundingRateData(const std::string &dirPath,
                 return i.instId == symbol;
             });
 
-            if (it == exchangeInstruments.end() || it->state != InstrumentStatus::live) {
-                symbolsToDelete.push_back(symbol);
+            if (it == exchangeInstruments.end()) {
+                if (m_p->deleteDelistedData) {
+                    symbolsToDelete.push_back(symbol);
+                } else {
+                    tempSymbols.push_back(symbol);
+                }
                 spdlog::info(fmt::format(
                     "Symbol: {} not found on Exchange, probably delisted", symbol));
+            } else if (it->state != InstrumentStatus::live) {
+                if (m_p->deleteDelistedData) {
+                    symbolsToDelete.push_back(symbol);
+                } else {
+                    tempSymbols.push_back(it->instId);
+                }
             } else {
                 tempSymbols.push_back(it->instId);
             }
@@ -783,7 +862,7 @@ void OKXDownloader::updateFundingRateData(const std::string &dirPath,
     if (m_p->deleteDelistedData) {
         for (const auto &symbol: symbolsToDelete) {
             std::filesystem::path symbolFilePathCsv = finalPath;
-            symbolFilePathCsv.append(CSV_FUT_DIR);
+            symbolFilePathCsv.append(CSV_FUT_FR_DIR);
             symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
             symbolFilePathCsv.append(symbol + "_fr.csv");
 

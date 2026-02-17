@@ -17,6 +17,8 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include "vk/utils/magic_enum_wrapper.hpp"
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <set>
 #include <spdlog/spdlog.h>
 #include <regex>
 #include <future>
@@ -152,6 +154,9 @@ void BinanceFuturesDownloader::updateMarketData(const std::string &dirPath, cons
     std::vector<std::filesystem::path> csvFilePaths;
     std::vector<std::string> symbolsToDelete;
 
+    // Map symbol -> deliveryDate for delisted symbols (used as upper time bound)
+    std::map<std::string, int64_t> symbolDeliveryDates;
+
     spdlog::info(fmt::format("Symbols directory: {}", finalPath.string()));
 
     if (symbolsToUpdate.empty()) {
@@ -170,16 +175,43 @@ void BinanceFuturesDownloader::updateMarketData(const std::string &dirPath, cons
         }
     }
 
+    // Build set of all known symbols from exchange for filesystem-based delisting detection
+    std::set<std::string> exchangeSymbolSet;
+    for (const auto &el: exchangeInfo.symbols) {
+        exchangeSymbolSet.insert(el.symbol);
+    }
+
     if (symbolsToUpdate.empty()) {
         constexpr auto symbolContract = futures::ContractType::PERPETUAL;
         const auto symbolType = std::string(magic_enum::enum_name(symbolContract));
 
         for (const auto &el: exchangeInfo.symbols) {
             if (el.contractType == symbolType && el.quoteAsset == "USDT") {
-                if (el.status == ContractStatus::TRADING) {
-                    symbolsToUpdate.push_back(el.symbol);
-                } else {
+                if (el.status != ContractStatus::TRADING && m_p->deleteDelistedData) {
                     symbolsToDelete.push_back(el.symbol);
+                } else {
+                    symbolsToUpdate.push_back(el.symbol);
+                    if (el.status != ContractStatus::TRADING && el.deliveryDate > 0) {
+                        symbolDeliveryDates[el.symbol] = el.deliveryDate;
+                    }
+                }
+            }
+        }
+
+        // Scan existing CSV files for symbols no longer on the exchange
+        if (m_p->deleteDelistedData) {
+            std::filesystem::path csvDir = finalPath;
+            csvDir.append(CSV_FUT_DIR);
+            csvDir.append(Downloader::minutesToString(barSizeInMinutes));
+
+            if (std::filesystem::exists(csvDir)) {
+                for (const auto &entry: std::filesystem::directory_iterator(csvDir)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                        const auto stem = entry.path().stem().string();
+                        if (!exchangeSymbolSet.contains(stem)) {
+                            symbolsToDelete.push_back(stem);
+                        }
+                    }
                 }
             }
         }
@@ -191,9 +223,22 @@ void BinanceFuturesDownloader::updateMarketData(const std::string &dirPath, cons
                 return s.symbol == symbol;
             });
 
-            if (it == exchangeInfo.symbols.end() || it->status != ContractStatus::TRADING) {
-                symbolsToDelete.push_back(symbol);
+            if (it == exchangeInfo.symbols.end()) {
+                if (m_p->deleteDelistedData) {
+                    symbolsToDelete.push_back(symbol);
+                }
                 spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", symbol));
+            } else if (it->status != ContractStatus::TRADING) {
+                if (m_p->deleteDelistedData) {
+                    symbolsToDelete.push_back(symbol);
+                    spdlog::info(fmt::format("Symbol: {} is not trading (status: {}), will be deleted", symbol,
+                                             magic_enum::enum_name(it->status)));
+                } else {
+                    tempSymbols.push_back(it->symbol);
+                    if (it->deliveryDate > 0) {
+                        symbolDeliveryDates[it->symbol] = it->deliveryDate;
+                    }
+                }
             } else {
                 tempSymbols.push_back(it->symbol);
             }
@@ -205,7 +250,8 @@ void BinanceFuturesDownloader::updateMarketData(const std::string &dirPath, cons
     for (const auto &s: symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [finalPath, this, &bnbCandleInterval, &barSizeInMinutes, convertToT6](const std::string &symbol,
+                       [finalPath, this, &bnbCandleInterval, &barSizeInMinutes, convertToT6, &symbolDeliveryDates](
+                   const std::string &symbol,
                    Semaphore &maxJobs) ->
                    std::filesystem::path {
                            std::scoped_lock w(maxJobs);
@@ -243,6 +289,12 @@ void BinanceFuturesDownloader::updateMarketData(const std::string &dirPath, cons
                            // Do not download the last minute - it is not complete yet.
                            nowTimestamp = nowTimestamp - 60000;
 
+                           // For delisted symbols, use deliveryDate as upper time bound
+                           auto endTimestamp = nowTimestamp;
+                           if (const auto dit = symbolDeliveryDates.find(symbol); dit != symbolDeliveryDates.end()) {
+                               endTimestamp = dit->second;
+                           }
+
                            spdlog::info(fmt::format("Updating candles for symbol: {}...", symbol));
 
                            const int64_t fromTimeStamp = BinanceCommon::checkSymbolCSVFile(symbolFilePathCsv.string());
@@ -251,7 +303,7 @@ void BinanceFuturesDownloader::updateMarketData(const std::string &dirPath, cons
                                const auto candles = m_p->bnbFuturesClient->getHistoricalPrices(symbol,
                                    bnbCandleInterval,
                                    fromTimeStamp,
-                                   nowTimestamp, 1500);
+                                   endTimestamp, 1500);
 
                                if (!candles.empty()) {
                                    if (BinanceCommon::writeCandlesToCSVFile(candles, symbolFilePathCsv.string())) {
@@ -311,14 +363,14 @@ void BinanceFuturesDownloader::updateMarketData(const std::string &dirPath, cons
 
             if (std::filesystem::exists(symbolFilePathCsv)) {
                 std::filesystem::remove(symbolFilePathCsv);
-                spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol,
-                             symbolFilePathCsv.string());
+                spdlog::info(fmt::format("Removing csv file for delisted symbol: {}, file: {}...", symbol,
+                             symbolFilePathCsv.string()));
             }
 
             if (std::filesystem::exists(symbolFilePathT6)) {
                 std::filesystem::remove(symbolFilePathT6);
-                spdlog::info("Removing t6 file for delisted symbol: {}, file: {}...", symbol,
-                             symbolFilePathT6.string());
+                spdlog::info(fmt::format("Removing t6 file for delisted symbol: {}, file: {}...", symbol,
+                             symbolFilePathT6.string()));
             }
         }
     }
@@ -340,6 +392,9 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string &dirPath,
     std::vector<std::filesystem::path> csvFilePaths;
     std::vector<std::string> symbolsToDelete;
 
+    // Map symbol -> deliveryDate for delisted symbols (used as upper time bound)
+    std::map<std::string, int64_t> symbolDeliveryDates;
+
     spdlog::info(fmt::format("Symbols directory: {}", finalPath.string()));
 
     if (symbolsToUpdate.empty()) {
@@ -353,9 +408,15 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string &dirPath,
     for (const auto &limit: exchangeInfo.rateLimits) {
         if (limit.rateLimitType == RateLimitType::REQUEST_WEIGHT && limit.intervalNum == 1 &&
             limit.interval == RateLimitInterval::MINUTE) {
-            spdlog::info(fmt::format("Wight limit: {}", limit.limit));
+            spdlog::info(fmt::format("Weight limit: {}", limit.limit));
             m_p->bnbFuturesClient->setAPIWeightLimit(limit.limit);
         }
+    }
+
+    // Build set of all known symbols from exchange for filesystem-based delisting detection
+    std::set<std::string> exchangeSymbolSet;
+    for (const auto &el: exchangeInfo.symbols) {
+        exchangeSymbolSet.insert(el.symbol);
     }
 
     if (symbolsToUpdate.empty()) {
@@ -364,10 +425,33 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string &dirPath,
 
         for (const auto &el: exchangeInfo.symbols) {
             if (el.contractType == symbolType && el.quoteAsset == "USDT") {
-                if (el.status == ContractStatus::TRADING) {
-                    symbolsToUpdate.push_back(el.symbol);
-                } else {
+                if (el.status != ContractStatus::TRADING && m_p->deleteDelistedData) {
                     symbolsToDelete.push_back(el.symbol);
+                } else {
+                    symbolsToUpdate.push_back(el.symbol);
+                    if (el.status != ContractStatus::TRADING && el.deliveryDate > 0) {
+                        symbolDeliveryDates[el.symbol] = el.deliveryDate;
+                    }
+                }
+            }
+        }
+
+        // Scan existing CSV files for symbols no longer on the exchange
+        if (m_p->deleteDelistedData) {
+            std::filesystem::path frDir = finalPath;
+            frDir.append(CSV_FUT_FR_DIR);
+
+            if (std::filesystem::exists(frDir)) {
+                for (const auto &entry: std::filesystem::directory_iterator(frDir)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                        auto stem = entry.path().stem().string();
+                        if (stem.ends_with("_fr")) {
+                            stem = stem.substr(0, stem.size() - 3);
+                        }
+                        if (!exchangeSymbolSet.contains(stem)) {
+                            symbolsToDelete.push_back(stem);
+                        }
+                    }
                 }
             }
         }
@@ -379,10 +463,22 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string &dirPath,
                 return s.symbol == symbol;
             });
 
-            if (it == exchangeInfo.symbols.end() || it->status != ContractStatus::TRADING) {
-                symbolsToDelete.push_back(symbol);
-                spdlog::info(fmt::format(
-                    "Symbol: {} not found on Exchange, probably delisted", symbol));
+            if (it == exchangeInfo.symbols.end()) {
+                if (m_p->deleteDelistedData) {
+                    symbolsToDelete.push_back(symbol);
+                }
+                spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", symbol));
+            } else if (it->status != ContractStatus::TRADING) {
+                if (m_p->deleteDelistedData) {
+                    symbolsToDelete.push_back(symbol);
+                    spdlog::info(fmt::format("Symbol: {} is not trading (status: {}), will be deleted", symbol,
+                                             magic_enum::enum_name(it->status)));
+                } else {
+                    tempSymbols.push_back(it->symbol);
+                    if (it->deliveryDate > 0) {
+                        symbolDeliveryDates[it->symbol] = it->deliveryDate;
+                    }
+                }
             } else {
                 tempSymbols.push_back(it->symbol);
             }
@@ -394,11 +490,10 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string &dirPath,
     for (const auto &s: symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [finalPath, this](const std::string &symbol,
+                       [finalPath, this, &symbolDeliveryDates](const std::string &symbol,
                                          Semaphore &maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
                            std::filesystem::path symbolFilePathCsv = finalPath;
-
 
                            symbolFilePathCsv.append(CSV_FUT_FR_DIR);
 
@@ -410,7 +505,13 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string &dirPath,
 
                            symbolFilePathCsv.append(symbol + "_fr.csv");
 
-                           const auto nowTimestamp = std::chrono::seconds(std::time(nullptr)).count() * 1000;
+                           auto nowTimestamp = std::chrono::seconds(std::time(nullptr)).count() * 1000;
+
+                           // For delisted symbols, use deliveryDate as upper time bound
+                           auto endTimestamp = nowTimestamp;
+                           if (auto dit = symbolDeliveryDates.find(symbol); dit != symbolDeliveryDates.end()) {
+                               endTimestamp = dit->second;
+                           }
 
                            spdlog::info(fmt::format("Updating FR for symbol: {}...", symbol));
 
@@ -418,7 +519,7 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string &dirPath,
 
                            try {
                                const auto fr = m_p->bnbFuturesClient->getFundingRates(
-                                   symbol, fromTimeStamp, nowTimestamp,
+                                   symbol, fromTimeStamp, endTimestamp,
                                    1000);
                                if (!fr.empty()) {
                                    if (fr.size() == 1) {
@@ -452,14 +553,14 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string &dirPath,
     if (m_p->deleteDelistedData) {
         for (const auto &symbol: symbolsToDelete) {
             std::filesystem::path symbolFilePathCsv = finalPath;
-            symbolFilePathCsv.append(CSV_FUT_DIR);
+            symbolFilePathCsv.append(CSV_FUT_FR_DIR);
             symbolFilePathCsv = symbolFilePathCsv.lexically_normal();
             symbolFilePathCsv.append(symbol + "_fr.csv");
 
             if (std::filesystem::exists(symbolFilePathCsv)) {
                 std::filesystem::remove(symbolFilePathCsv);
-                spdlog::info("Removing csv file for delisted symbol: {}, file: {}...", symbol,
-                             symbolFilePathCsv.string());
+                spdlog::info(fmt::format("Removing csv file for delisted symbol: {}, file: {}...", symbol,
+                             symbolFilePathCsv.string()));
             }
         }
     }
