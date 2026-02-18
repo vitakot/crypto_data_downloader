@@ -42,6 +42,82 @@ MEXC API has **undocumented limits** for historical candlestick data:
 
 > **Recommendation:** Use **1h (hourly)** or larger intervals for complete MEXC historical data.
 
+## Bybit Delisted Symbol Downloader (Python)
+
+The C++ downloader only fetches data for **active symbols** via exchange REST APIs.
+Historical data for delisted symbols is not available through the standard API endpoints,
+but Bybit publishes complete tick-by-tick trade history on a public server:
+
+- **Futures:** `https://public.bybit.com/trading/`
+- **Spot:** `https://public.bybit.com/spot/`
+
+The Python script `python/bybit_history_downloader.py` handles this use case.
+
+### What it does
+
+1. Queries the Bybit REST API (`GET /v5/market/instruments-info?status=Closed`) to obtain
+   the full list of delisted symbols (USDT-margined linear perpetuals or spot).
+2. Cross-references the result with symbols available on `public.bybit.com`.
+3. Downloads the missing daily tick data files (`.csv.gz`) and aggregates them to OHLCV
+   candles at **1m** and **1h** resolution.
+4. Saves the output in the same directory structure as the C++ downloader
+   (`csvFut/1m/SYMBOL.csv`, `csvFut/1h/SYMBOL.csv` for futures;
+   `csvSpot/1m/SYMBOL.csv`, `csvSpot/1h/SYMBOL.csv` for spot).
+5. On subsequent runs, only newly published files are downloaded (incremental updates).
+
+### Output format
+
+```csv
+open_time,open,high,low,close,volume,turnover
+1704067200000,42285.0,42300.0,42280.0,42290.0,1.5,63427.5
+```
+
+- `open_time` — milliseconds since UTC epoch (compatible with C++ CSV reader)
+- `volume` — base asset quantity
+- `turnover` — USDT value
+
+### Setup
+
+```bash
+cd python
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Usage
+
+```bash
+# All delisted futures (1m + 1h), 4 parallel threads
+python python/bybit_history_downloader.py --type futures -o /data/crypto
+
+# All delisted spot
+python python/bybit_history_downloader.py --type spot -o /data/crypto
+
+# Specific symbols only
+python python/bybit_history_downloader.py --type futures -s LUNA2USDT FTMUSDT -o /data/crypto
+
+# More parallel threads for faster download
+python python/bybit_history_downloader.py --type futures -o /data/crypto -j 8
+```
+
+### Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-o`, `--outdir` | Output base directory (same as C++ downloader) | *required* |
+| `--type` | Market type: `futures` or `spot` | `futures` |
+| `-s`, `--symbol` | Specific symbol(s); bypasses API lookup | all delisted |
+| `-j`, `--jobs` | Number of parallel download threads | `4` |
+| `--include-today` | Include today's (potentially incomplete) data file | off |
+
+### Requirements
+
+- Python 3.10+
+- `requests`, `pandas` (see `python/requirements.txt`)
+
+---
+
 ## Requirements
 
 - C++20 compatible compiler (GCC 11+, Clang 14+, MSVC 2022)
