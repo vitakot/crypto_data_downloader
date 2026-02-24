@@ -218,7 +218,7 @@ crypto_data_downloader [OPTIONS]
 | `-b` | `--bar_size` | Bar size in minutes (1, 5, 15, 30, 60, etc.) | `1` |
 | `-c` | `--category` | Market category: `f` (futures), `s` (spot) | `f` |
 | `-d` | `--delete_delisted` | Delete delisted symbols data files | - |
-| `-z` | `--t6_conversion` | Convert CSV data to T6 format (Zorro Trader format) | - |
+| `-z` | `--t6_conversion` | Convert existing CSV data to T6 format (Zorro Trader) without downloading | - |
 | `-v` | `--version` | Print version and exit | - |
 | `-h` | `--help` | Print help and exit | - |
 
@@ -269,14 +269,14 @@ crypto_data_downloader [OPTIONS]
 ./crypto_data_downloader -e bnb -d -o /data/binance
 ```
 
-**Download and convert to T6 format (Zorro):**
+**Convert existing CSV files to T6 format (Zorro) without downloading:**
 ```bash
-./crypto_data_downloader -e bnb -z -o /data/binance
+./crypto_data_downloader -z -o /data/binance -e bnb -b 1 -c f
 ```
 
-**Combined options (delete delisted + T6 conversion):**
+**Convert spot 1-hour data to T6:**
 ```bash
-./crypto_data_downloader -e bnb -d -z -o /data/binance
+./crypto_data_downloader -z -o /data/binance -e bnb -b 60 -c s
 ```
 
 ## Output Format
@@ -303,7 +303,7 @@ funding_time,funding_rate
 
 ### T6 Format (Zorro)
 
-When the `-z` (or `--t6_conversion`) option is specified, the tool generates binary T6 files compatible with the [Zorro](https://zorro-project.com/) trading platform in the `t6Fut` or `t6Spot` directories.
+The `-z` (or `--t6_conversion`) option runs a standalone conversion of existing CSV files to binary T6 files compatible with the [Zorro](https://zorro-project.com/) trading platform. No data is downloaded — only CSV files already present in the `csvFut` or `csvSpot` directories are converted. Output is written to `t6Fut` or `t6Spot` respectively.
 
 ## Project Structure
 
