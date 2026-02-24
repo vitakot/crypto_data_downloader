@@ -43,3 +43,6 @@ All notable changes to this project will be documented in this file. This projec
 ## [2.2.0](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.2.0) (2026-02-18)
 - Add support for delisting symbols on Binance
 - Add support for delisting symbols on Bybit - separate Python script
+
+## [2.2.1](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.2.1) (2026-02-24)
+- Add possibility to run t6 conversion only
