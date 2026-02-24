@@ -23,19 +23,23 @@ All notable changes to this project will be documented in this file. This projec
 ## [2.1.5](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.5) (2025-11-17)
 - Add continuous download for Bybit
 
-## [2.1.6](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.5) (2026-01-18)
+## [2.1.6](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.6) (2026-01-18)
 - Add option for handling delisted symbols data (keep or delete)
 
-## [2.1.7](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.5) (2026-01-24)
+## [2.1.7](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.7) (2026-01-24)
 - Change -k option for handling delisted symbols data (keep by default)
 - Add -z option for t6 conversion (no conversion by default)
 - Fix Bybit spot error
 
-## [2.1.8](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.5) (2026-01-28)
+## [2.1.8](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.8) (2026-01-28)
 - Add OKX Spot support
 - Fix in Bybit candles
 - Add/Improve rate limiters
 
-## [2.1.9](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.5) (2026-01-31)
+## [2.1.9](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.1.9) (2026-01-31)
 - Add MEXC support
 - Many fixes I don't remember
+
+## [2.2.0](https://github.com/vitakot/crypto_data_downloader/releases/tag/v2.2.0) (2026-02-18)
+- Add support for delisting symbols on Binance
+- Add support for delisting symbols on Bybit - separate Python script
