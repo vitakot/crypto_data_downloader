@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
             ("c,category", R"(Market category, either Spot (s) or Futures (f), example -c f, default is Futures)",
              cxxopts::value<std::string>()->default_value("f"))
             ("d,delete_delisted", R"(Delete delisted symbols data files, if not specified delisted files will be preserved)")
-            ("z,t6_conversion", R"(Convert CSV data to T6 format (Zorro Trader format) after download)")
+            ("z,t6_conversion", R"(Convert existing CSV data to T6 format (Zorro Trader format) without downloading new data)")
             ("v,version", R"(Print version and quit)")
             ("h,help", R"(Print usage and quit)");
     try {
@@ -268,8 +268,10 @@ int main(int argc, char **argv) {
             downloader = std::make_unique<MEXCSpotDownloader>(maxJobs, deleteDelistedData);
         }
 
-        if (dataType == "c") {
-            downloader->updateMarketData(outputDirectory, symbols, candleInterval, {}, {}, convertToT6);
+        if (convertToT6) {
+            downloader->convertToT6(outputDirectory, candleInterval);
+        } else if (dataType == "c") {
+            downloader->updateMarketData(outputDirectory, symbols, candleInterval, {}, {}, false);
         } else if (dataType == "fr") {
             downloader->updateFundingRateData(outputDirectory, symbols, {}, {});
         }

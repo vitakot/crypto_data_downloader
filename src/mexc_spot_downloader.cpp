@@ -19,6 +19,8 @@ Copyright (c) 2026 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <future>
 #include <set>
 #include <spdlog/fmt/ranges.h>
+#include <ranges>
+#include "csv.h"
 
 using namespace vk::mexc;
 using namespace vk::mexc::spot;
@@ -48,6 +50,19 @@ struct MEXCSpotDownloader::P {
     static int recoverAndMergeTempFiles(const std::string &tempDir, const std::string &csvPath, const std::string &symbol);
 
     static mexc::CandleInterval vkIntervalToMexcInterval(vk::CandleInterval interval);
+
+    struct CsvCandle {
+        int64_t openTime{};
+        double open{};
+        double high{};
+        double low{};
+        double close{};
+        double volume{};
+    };
+
+    static bool readCandlesFromCSVFile(const std::string &path, std::vector<CsvCandle> &candles);
+    static bool writeCSVCandlesToZorroT6File(const std::string &csvPath, const std::string &t6Path);
+    void convertFromCSVToT6(const std::vector<std::filesystem::path> &filePaths, const std::string &outDirPath) const;
 };
 
 mexc::CandleInterval MEXCSpotDownloader::P::vkIntervalToMexcInterval(const vk::CandleInterval interval) {
@@ -75,6 +90,101 @@ mexc::CandleInterval MEXCSpotDownloader::P::vkIntervalToMexcInterval(const vk::C
         default:
             throw std::invalid_argument("Unsupported candle interval for MEXC Spot");
     }
+}
+
+bool MEXCSpotDownloader::P::readCandlesFromCSVFile(const std::string &path, std::vector<CsvCandle> &candles) {
+    try {
+        io::CSVReader<7> in(path);
+        in.read_header(io::ignore_extra_column, "open_time", "open", "high", "low", "close", "volume", "quote_asset_volume");
+
+        CsvCandle candle;
+        double quoteVol = 0.0;
+        while (in.read_row(candle.openTime, candle.open, candle.high, candle.low, candle.close,
+                           candle.volume, quoteVol)) {
+            candles.push_back(candle);
+        }
+    } catch (std::exception &e) {
+        spdlog::warn(fmt::format("Could not parse CSV asset file: {}, reason: {}", path, e.what()));
+        return false;
+    }
+
+    return true;
+}
+
+bool MEXCSpotDownloader::P::writeCSVCandlesToZorroT6File(const std::string &csvPath, const std::string &t6Path) {
+    const std::filesystem::path pathToT6File{t6Path};
+
+    std::ofstream ofs;
+    ofs.open(pathToT6File.string(), std::ios::trunc | std::ios::binary);
+
+    if (!ofs.is_open()) {
+        spdlog::error(fmt::format("Couldn't open file: {}", t6Path));
+        return false;
+    }
+
+    std::vector<CsvCandle> candles;
+    if (!readCandlesFromCSVFile(csvPath, candles)) {
+        spdlog::error(fmt::format("Couldn't read candles from csv file: {}", csvPath));
+        return false;
+    }
+
+    constexpr int64_t oneMinuteMs = 60000;
+
+    for (const auto &candle: std::ranges::reverse_view(candles)) {
+        T6 t6;
+        t6.fOpen = static_cast<float>(candle.open);
+        t6.fHigh = static_cast<float>(candle.high);
+        t6.fLow = static_cast<float>(candle.low);
+        t6.fClose = static_cast<float>(candle.close);
+        t6.fVal = 0.0;
+        t6.fVol = static_cast<float>(candle.volume);
+        t6.time = convertTimeMs(candle.openTime + oneMinuteMs);
+        ofs.write(reinterpret_cast<char *>(&t6), sizeof(T6));
+    }
+
+    ofs.close();
+    return true;
+}
+
+void MEXCSpotDownloader::P::convertFromCSVToT6(const std::vector<std::filesystem::path> &filePaths,
+                                                const std::string &outDirPath) const {
+    std::vector<std::future<std::pair<std::string, bool>>> futures;
+    std::vector<std::pair<std::string, bool>> readyFutures;
+
+    for (const auto &path: filePaths) {
+        if (path.empty()) {
+            continue;
+        }
+        std::filesystem::path t6FilePath = outDirPath;
+        const auto fileName = path.filename().replace_extension("t6");
+        t6FilePath.append(fileName.string());
+
+        spdlog::info(fmt::format("Converting symbol: {}...", path.filename().replace_extension("").string()));
+
+        futures.push_back(
+            std::async(std::launch::async,
+                       [](const std::filesystem::path &csvPath, const std::filesystem::path &t6Path,
+                          Semaphore &maxJobs) -> std::pair<std::string, bool> {
+                           std::scoped_lock w(maxJobs);
+                           std::pair<std::string, bool> retVal;
+                           retVal.first = csvPath.filename().replace_extension("").string();
+                           retVal.second = writeCSVCandlesToZorroT6File(csvPath.string(), t6Path.string());
+                           return retVal;
+                       }, path, t6FilePath, std::ref(maxConcurrentConvertJobs)));
+    }
+
+    do {
+        for (auto &future: futures) {
+            if (isReady(future)) {
+                readyFutures.push_back(future.get());
+                if (readyFutures.back().second) {
+                    spdlog::info(fmt::format("Symbol: {} converted", readyFutures.back().first));
+                } else {
+                    spdlog::error(fmt::format("Symbol: {} conversion failed", readyFutures.back().first));
+                }
+            }
+        }
+    } while (readyFutures.size() < futures.size());
 }
 
 int64_t MEXCSpotDownloader::P::checkSymbolCSVFile(const std::string &path) {
@@ -579,7 +689,30 @@ void MEXCSpotDownloader::updateMarketData(const std::string &dirPath, const std:
     } while (csvFilePaths.size() < futures.size());
 
     if (convertToT6) {
-        spdlog::warn("T6 conversion is not supported for MEXC Spot yet");
+        std::filesystem::path T6Directory = finalPath;
+        T6Directory.append(T6_SPOT_DIR);
+        T6Directory.append(Downloader::minutesToString(barSizeInMinutes));
+
+        std::filesystem::path csvDirectory = finalPath;
+        csvDirectory.append(CSV_SPOT_DIR);
+        csvDirectory.append(Downloader::minutesToString(barSizeInMinutes));
+
+        std::vector<std::filesystem::path> allCsvFiles;
+        if (std::filesystem::exists(csvDirectory)) {
+            for (const auto &entry: std::filesystem::directory_iterator(csvDirectory)) {
+                if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                    allCsvFiles.push_back(entry.path());
+                }
+            }
+        }
+
+        if (!allCsvFiles.empty()) {
+            if (const auto err = createDirectoryRecursively(T6Directory.string())) {
+                throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(), err.message().c_str()));
+            }
+            spdlog::info(fmt::format("Converting from csv to t6..."));
+            m_p->convertFromCSVToT6(allCsvFiles, T6Directory.string());
+        }
     }
 
     if (m_p->deleteDelistedData) {
@@ -605,5 +738,35 @@ void MEXCSpotDownloader::updateMarketData(const std::string &connectionString, c
 void MEXCSpotDownloader::updateFundingRateData(const std::string &dirPath, const std::vector<std::string> &symbols, const onSymbolsToUpdate &onSymbolsToUpdateCB,
                                                const onSymbolCompleted &onSymbolCompletedCB) const {
     spdlog::warn("Funding rates are not available for MEXC Spot market");
+}
+
+void MEXCSpotDownloader::convertToT6(const std::string &dirPath, const CandleInterval candleInterval) const {
+    const auto barSizeInMinutes = static_cast<std::underlying_type_t<CandleInterval>>(candleInterval) / 60;
+    const std::filesystem::path finalPath(dirPath);
+
+    std::filesystem::path csvDirectory = finalPath;
+    csvDirectory.append(CSV_SPOT_DIR);
+    csvDirectory.append(Downloader::minutesToString(barSizeInMinutes));
+
+    std::filesystem::path T6Directory = finalPath;
+    T6Directory.append(T6_SPOT_DIR);
+    T6Directory.append(Downloader::minutesToString(barSizeInMinutes));
+
+    std::vector<std::filesystem::path> allCsvFiles;
+    if (std::filesystem::exists(csvDirectory)) {
+        for (const auto &entry: std::filesystem::directory_iterator(csvDirectory)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                allCsvFiles.push_back(entry.path());
+            }
+        }
+    }
+
+    if (!allCsvFiles.empty()) {
+        if (const auto err = createDirectoryRecursively(T6Directory.string())) {
+            throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(), err.message().c_str()));
+        }
+        spdlog::info(fmt::format("Converting from csv to t6..."));
+        m_p->convertFromCSVToT6(allCsvFiles, T6Directory.string());
+    }
 }
 } // namespace vk

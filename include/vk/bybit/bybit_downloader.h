@@ -39,6 +39,8 @@ public:
                                const std::vector<std::string> &symbols,
                                const onSymbolsToUpdate &onSymbolsToUpdateCB,
                                const onSymbolCompleted &onSymbolCompletedCB) const override;
+
+    void convertToT6(const std::string &dirPath, CandleInterval candleInterval) const override;
 };
 }
 #endif //INCLUDE_VK_BYBIT_DOWNLOADER_H

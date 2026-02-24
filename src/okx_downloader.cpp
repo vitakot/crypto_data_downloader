@@ -669,13 +669,28 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
     T6Directory.append(t6DirName);
     T6Directory.append(Downloader::minutesToString(barSizeInMinutes));
 
-    if (convertToT6 && !csvFilePaths.empty()) {
-        if (const auto err = createDirectoryRecursively(T6Directory.string())) {
-            throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(),
-                                                 err.message().c_str()));
+    if (convertToT6) {
+        std::filesystem::path csvDirectory = finalPath;
+        csvDirectory.append(csvDirName);
+        csvDirectory.append(Downloader::minutesToString(barSizeInMinutes));
+
+        std::vector<std::filesystem::path> allCsvFiles;
+        if (std::filesystem::exists(csvDirectory)) {
+            for (const auto &entry: std::filesystem::directory_iterator(csvDirectory)) {
+                if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                    allCsvFiles.push_back(entry.path());
+                }
+            }
         }
-        spdlog::info(fmt::format("Converting from csv to t6..."));
-        m_p->convertFromCSVToT6(csvFilePaths, T6Directory.string());
+
+        if (!allCsvFiles.empty()) {
+            if (const auto err = createDirectoryRecursively(T6Directory.string())) {
+                throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(),
+                                                     err.message().c_str()));
+            }
+            spdlog::info(fmt::format("Converting from csv to t6..."));
+            m_p->convertFromCSVToT6(allCsvFiles, T6Directory.string());
+        }
     }
 
     if (m_p->deleteDelistedData) {
@@ -872,6 +887,51 @@ void OKXDownloader::updateFundingRateData(const std::string &dirPath,
                              symbolFilePathCsv.string());
             }
         }
+    }
+}
+
+void OKXDownloader::convertToT6(const std::string &dirPath, const CandleInterval candleInterval) const {
+    const auto barSizeInMinutes = static_cast<std::underlying_type_t<CandleInterval>>(candleInterval) / 60;
+    const std::filesystem::path finalPath(dirPath);
+
+    std::string csvDirName;
+    std::string t6DirName;
+
+    switch (m_p->marketCategory) {
+        case MarketCategory::Spot:
+            csvDirName = CSV_SPOT_DIR;
+            t6DirName = T6_SPOT_DIR;
+            break;
+        case MarketCategory::Futures:
+            csvDirName = CSV_FUT_DIR;
+            t6DirName = T6_FUT_DIR;
+            break;
+    }
+
+    std::filesystem::path csvDirectory = finalPath;
+    csvDirectory.append(csvDirName);
+    csvDirectory.append(Downloader::minutesToString(barSizeInMinutes));
+
+    std::filesystem::path T6Directory = finalPath;
+    T6Directory.append(t6DirName);
+    T6Directory.append(Downloader::minutesToString(barSizeInMinutes));
+
+    std::vector<std::filesystem::path> allCsvFiles;
+    if (std::filesystem::exists(csvDirectory)) {
+        for (const auto &entry: std::filesystem::directory_iterator(csvDirectory)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                allCsvFiles.push_back(entry.path());
+            }
+        }
+    }
+
+    if (!allCsvFiles.empty()) {
+        if (const auto err = createDirectoryRecursively(T6Directory.string())) {
+            throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(),
+                                                 err.message().c_str()));
+        }
+        spdlog::info("Converting from csv to t6...");
+        m_p->convertFromCSVToT6(allCsvFiles, T6Directory.string());
     }
 }
 }
