@@ -223,13 +223,28 @@ void BinanceSpotDownloader::updateMarketData(const std::string &dirPath, const s
     T6Directory.append(T6_SPOT_DIR);
     T6Directory.append(Downloader::minutesToString(barSizeInMinutes));
 
-    if (convertToT6 && !csvFilePaths.empty()) {
-        if (const auto err = createDirectoryRecursively(T6Directory.string())) {
-            throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(),
-                                                 err.message().c_str()));
+    if (convertToT6) {
+        std::filesystem::path csvDirectory = finalPath;
+        csvDirectory.append(CSV_SPOT_DIR);
+        csvDirectory.append(Downloader::minutesToString(barSizeInMinutes));
+
+        std::vector<std::filesystem::path> allCsvFiles;
+        if (std::filesystem::exists(csvDirectory)) {
+            for (const auto &entry: std::filesystem::directory_iterator(csvDirectory)) {
+                if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                    allCsvFiles.push_back(entry.path());
+                }
+            }
         }
-        spdlog::info(fmt::format("Converting from csv to t6..."));
-        m_p->binanceCommon->convertFromCSVToT6(csvFilePaths, T6Directory.string());
+
+        if (!allCsvFiles.empty()) {
+            if (const auto err = createDirectoryRecursively(T6Directory.string())) {
+                throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(),
+                                                     err.message().c_str()));
+            }
+            spdlog::info(fmt::format("Converting from csv to t6..."));
+            m_p->binanceCommon->convertFromCSVToT6(allCsvFiles, T6Directory.string());
+        }
     }
 
     if (m_p->deleteDelistedData) {
@@ -274,5 +289,36 @@ void BinanceSpotDownloader::updateFundingRateData(const std::string &dirPath, co
                                                   const onSymbolsToUpdate &onSymbolsToUpdateCB,
                                                   const onSymbolCompleted &onSymbolCompletedCB) const {
     throw std::runtime_error("Unimplemented: BinanceSpotDownloader::updateFundingRateData()");
+}
+
+void BinanceSpotDownloader::convertToT6(const std::string &dirPath, const CandleInterval candleInterval) const {
+    const auto barSizeInMinutes = static_cast<std::underlying_type_t<CandleInterval>>(candleInterval) / 60;
+    const std::filesystem::path finalPath(dirPath);
+
+    std::filesystem::path csvDirectory = finalPath;
+    csvDirectory.append(CSV_SPOT_DIR);
+    csvDirectory.append(Downloader::minutesToString(barSizeInMinutes));
+
+    std::filesystem::path T6Directory = finalPath;
+    T6Directory.append(T6_SPOT_DIR);
+    T6Directory.append(Downloader::minutesToString(barSizeInMinutes));
+
+    std::vector<std::filesystem::path> allCsvFiles;
+    if (std::filesystem::exists(csvDirectory)) {
+        for (const auto &entry: std::filesystem::directory_iterator(csvDirectory)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                allCsvFiles.push_back(entry.path());
+            }
+        }
+    }
+
+    if (!allCsvFiles.empty()) {
+        if (const auto err = createDirectoryRecursively(T6Directory.string())) {
+            throw std::runtime_error(fmt::format("Failed to create {}, err: {}", T6Directory.string(),
+                                                 err.message().c_str()));
+        }
+        spdlog::info(fmt::format("Converting from csv to t6..."));
+        m_p->binanceCommon->convertFromCSVToT6(allCsvFiles, T6Directory.string());
+    }
 }
 }
