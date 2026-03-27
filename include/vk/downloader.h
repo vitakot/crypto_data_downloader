@@ -12,11 +12,11 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 #include <spdlog/fmt/ostr.h>
 
 namespace vk {
-static auto CSV_FUT_DIR = "csvFut";
-static auto CSV_FUT_FR_DIR = "csvFr";
-static auto CSV_SPOT_DIR = "csvSpot";
-static auto T6_FUT_DIR = "t6Fut";
-static auto T6_SPOT_DIR = "t6Spot";
+static auto CSV_FUT_DIR = "futures/prices/csv";
+static auto CSV_FUT_FR_DIR = "futures/funding_rates/csv";
+static auto CSV_SPOT_DIR = "spot/prices/csv";
+static auto T6_FUT_DIR = "futures/prices/t6";
+static auto T6_SPOT_DIR = "spot/prices/t6";
 
 class Downloader {
 public:

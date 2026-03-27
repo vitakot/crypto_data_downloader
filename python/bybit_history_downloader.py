@@ -13,8 +13,8 @@ Public tick data sources:
   Spot    : https://public.bybit.com/spot/{SYMBOL}/{SYMBOL}_YYYY-MM-DD.csv.gz
 
 Output format matches crypto_data_downloader:
-  Futures : {outdir}/csvFut/{interval}/SYMBOL.csv
-  Spot    : {outdir}/csvSpot/{interval}/SYMBOL.csv
+  Futures : {outdir}/futures/prices/csv/{interval}/SYMBOL.csv
+  Spot    : {outdir}/spot/prices/csv/{interval}/SYMBOL.csv
   Columns : open_time,open,high,low,close,volume,turnover
   - open_time : milliseconds since UTC epoch
   - volume    : base asset quantity
@@ -44,7 +44,7 @@ BYBIT_API = "https://api.bybit.com"
 FUTURES_PUBLIC_URL = "https://public.bybit.com/trading/"
 SPOT_PUBLIC_URL    = "https://public.bybit.com/spot/"
 
-# Bybit interval string → (csvFut/csvSpot subdirectory, pandas resample freq)
+# Bybit interval string → (timeframe subdirectory, pandas resample freq)
 INTERVAL_MAP: dict[str, tuple[str, str]] = {
     "1":  ("1m", "1min"),
     "60": ("1h", "60min"),
@@ -54,7 +54,7 @@ INTERVAL_MAP: dict[str, tuple[str, str]] = {
 class MarketConfig(NamedTuple):
     category:    str   # Bybit API category: "linear" | "spot"
     public_url:  str   # base URL for public tick data
-    csv_dir:     str   # output subdirectory: "csvFut" | "csvSpot"
+    csv_dir:     str   # output subdirectory: "futures/prices/csv" | "spot/prices/csv"
     # timestamp unit in tick CSVs: "s" (futures) | "ms" (spot)
     ts_unit:     str
 
@@ -62,13 +62,13 @@ class MarketConfig(NamedTuple):
 FUTURES_CONFIG = MarketConfig(
     category="linear",
     public_url=FUTURES_PUBLIC_URL,
-    csv_dir="csvFut",
+    csv_dir="futures/prices/csv",
     ts_unit="s",
 )
 SPOT_CONFIG = MarketConfig(
     category="spot",
     public_url=SPOT_PUBLIC_URL,
-    csv_dir="csvSpot",
+    csv_dir="spot/prices/csv",
     ts_unit="ms",
 )
 

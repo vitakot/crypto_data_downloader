@@ -61,8 +61,8 @@ The Python script `python/bybit_history_downloader.py` handles this use case.
 3. Downloads the missing daily tick data files (`.csv.gz`) and aggregates them to OHLCV
    candles at **1m** and **1h** resolution.
 4. Saves the output in the same directory structure as the C++ downloader
-   (`csvFut/1m/SYMBOL.csv`, `csvFut/1h/SYMBOL.csv` for futures;
-   `csvSpot/1m/SYMBOL.csv`, `csvSpot/1h/SYMBOL.csv` for spot).
+   (`futures/prices/csv/1m/SYMBOL.csv`, `futures/prices/csv/1h/SYMBOL.csv` for futures;
+   `spot/prices/csv/1m/SYMBOL.csv`, `spot/prices/csv/1h/SYMBOL.csv` for spot).
 5. On subsequent runs, only newly published files are downloaded (incremental updates).
 
 ### Output format
@@ -283,7 +283,7 @@ crypto_data_downloader [OPTIONS]
 
 ### Candle Data (CSV)
 
-Files are saved to `<output_dir>/csvFut/<timeframe>/<SYMBOL>.csv` (or `csvSpot` for spot):
+Files are saved to `<output_dir>/futures/prices/csv/<timeframe>/<SYMBOL>.csv` (or `spot/prices/csv/` for spot):
 
 ```csv
 open_time,open,high,low,close,volume
@@ -293,7 +293,7 @@ open_time,open,high,low,close,volume
 
 ### Funding Rate Data (CSV)
 
-Files are saved to `<output_dir>/csvFr/<SYMBOL>_fr.csv`:
+Files are saved to `<output_dir>/futures/funding_rates/csv/<SYMBOL>_fr.csv`:
 
 ```csv
 funding_time,funding_rate
@@ -303,7 +303,7 @@ funding_time,funding_rate
 
 ### T6 Format (Zorro)
 
-The `-z` (or `--t6_conversion`) option runs a standalone conversion of existing CSV files to binary T6 files compatible with the [Zorro](https://zorro-project.com/) trading platform. No data is downloaded — only CSV files already present in the `csvFut` or `csvSpot` directories are converted. Output is written to `t6Fut` or `t6Spot` respectively.
+The `-z` (or `--t6_conversion`) option runs a standalone conversion of existing CSV files to binary T6 files compatible with the [Zorro](https://zorro-project.com/) trading platform. No data is downloaded — only CSV files already present in `futures/prices/csv/` or `spot/prices/csv/` are converted. Output is written to `futures/prices/t6/` or `spot/prices/t6/` respectively.
 
 ## Project Structure
 
