@@ -378,7 +378,7 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
 
     if (symbolsToUpdate.empty()) {
         for (const auto &el: exchangeSymbols) {
-            if (el.quoteCoin == "USDT") {
+            if (el.quoteCoin == "USDT" && el.contractType == ContractType::LinearPerpetual) {
                 if (el.contractStatus != ContractStatus::Trading && m_p->deleteDelistedData) {
                     symbolsToDelete.push_back(el.symbol);
                 } else {
