@@ -490,25 +490,42 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
                                return "";
                            }
 
-                           try {
-                               /// Add 1000 ms to fromTimeStamp so that we start with the next candle (1ms - 999ms does not work)
-                               const auto candles = m_p->bybitClient->getHistoricalPrices(category,
-                                   symbol,
-                                   bybitCandleInterval,
-                                   fromTimeStamp + 1000,
-                                   endTimestamp, 200, [symbolFilePathCsv, symbol, fromTimeStamp](const std::vector<Candle> &cnd) {
-                                       if (!cnd.empty()) {
-                                           if (!P::writeCandlesToCSVFile(cnd, symbolFilePathCsv.string(),fromTimeStamp)) {
-                                               spdlog::warn(fmt::format("CSV file for symbol: {} update failed", symbol));
+                           auto isRateLimitError = [](const std::string &msg) {
+                               return msg.find("10006") != std::string::npos ||
+                                      msg.find("too many") != std::string::npos ||
+                                      msg.find("429") != std::string::npos;
+                           };
+                           constexpr int maxRetries = 5;
+                           for (int attempt = 0; attempt < maxRetries; ++attempt) {
+                               try {
+                                   /// Add 1000 ms to fromTimeStamp so that we start with the next candle (1ms - 999ms does not work)
+                                   const auto candles = m_p->bybitClient->getHistoricalPrices(category,
+                                       symbol,
+                                       bybitCandleInterval,
+                                       fromTimeStamp + 1000,
+                                       endTimestamp, 200, [symbolFilePathCsv, symbol, fromTimeStamp](const std::vector<Candle> &cnd) {
+                                           if (!cnd.empty()) {
+                                               if (!P::writeCandlesToCSVFile(cnd, symbolFilePathCsv.string(),fromTimeStamp)) {
+                                                   spdlog::warn(fmt::format("CSV file for symbol: {} update failed", symbol));
+                                               }
                                            }
-                                       }
-                                   });
+                                       });
 
-                               spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
-                               return symbolFilePathCsv;
-                           } catch (const std::exception &e) {
-                               spdlog::warn(fmt::format("Updating candles for symbol: {} failed, reason: {}",
-                                                        symbol, e.what()));
+                                   spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
+                                   return symbolFilePathCsv;
+                               } catch (const std::exception &e) {
+                                   const std::string errMsg = e.what();
+                                   if (isRateLimitError(errMsg) && attempt < maxRetries - 1) {
+                                       const int waitMs = 1000 * (1 << attempt);
+                                       spdlog::warn(fmt::format("Rate limit for symbol: {}, retry {}/{} in {} ms: {}",
+                                                                symbol, attempt + 1, maxRetries - 1, waitMs, errMsg));
+                                       std::this_thread::sleep_for(std::chrono::milliseconds(waitMs));
+                                   } else {
+                                       spdlog::warn(fmt::format("Updating candles for symbol: {} failed (attempt {}/{}): {}",
+                                                                symbol, attempt + 1, maxRetries, errMsg));
+                                       break;
+                                   }
+                               }
                            }
                            return "";
                        }, s, std::ref(m_p->maxConcurrentDownloadJobs)));
@@ -714,24 +731,44 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
 
                            const int64_t fromTimeStamp = P::checkFundingRatesCSVFile(symbolFilePathCsv.string());
 
-                           try {
-                               if (const auto fr = m_p->bybitClient->getFundingRates(
-                                   Category::linear, symbol, fromTimeStamp + 1000, endTimestamp); !fr.empty()) {
-                                   if (fr.size() == 1) {
-                                       if (fromTimeStamp == fr.front().fundingRateTimestamp) {
+                           auto isRateLimitError = [](const std::string &msg) {
+                               return msg.find("10006") != std::string::npos ||
+                                      msg.find("too many") != std::string::npos ||
+                                      msg.find("429") != std::string::npos;
+                           };
+                           constexpr int maxRetries = 5;
+                           for (int attempt = 0; attempt < maxRetries; ++attempt) {
+                               try {
+                                   if (const auto fr = m_p->bybitClient->getFundingRates(
+                                       Category::linear, symbol, fromTimeStamp + 1000, endTimestamp); !fr.empty()) {
+                                       if (fr.size() == 1) {
+                                           if (fromTimeStamp == fr.front().fundingRateTimestamp) {
+                                               spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
+                                               return symbolFilePathCsv;
+                                           }
+                                       }
+
+                                       if (P::writeFundingRatesToCSVFile(fr, symbolFilePathCsv.string())) {
                                            spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
                                            return symbolFilePathCsv;
                                        }
+                                       break;
+                                   } else {
+                                       break;
                                    }
-
-                                   if (P::writeFundingRatesToCSVFile(fr, symbolFilePathCsv.string())) {
-                                       spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
-                                       return symbolFilePathCsv;
+                               } catch (const std::exception &e) {
+                                   const std::string errMsg = e.what();
+                                   if (isRateLimitError(errMsg) && attempt < maxRetries - 1) {
+                                       const int waitMs = 1000 * (1 << attempt);
+                                       spdlog::warn(fmt::format("Rate limit for symbol: {}, retry {}/{} in {} ms: {}",
+                                                                symbol, attempt + 1, maxRetries - 1, waitMs, errMsg));
+                                       std::this_thread::sleep_for(std::chrono::milliseconds(waitMs));
+                                   } else {
+                                       spdlog::warn(fmt::format("Updating symbol: {} failed (attempt {}/{}): {}",
+                                                                symbol, attempt + 1, maxRetries, errMsg));
+                                       break;
                                    }
                                }
-                           } catch (const std::exception &e) {
-                               spdlog::warn(fmt::format("Updating symbol: {} failed, reason: {}",
-                                                        symbol, e.what()));
                            }
                            return "";
                        }, s, std::ref(m_p->maxConcurrentDownloadJobs)));
