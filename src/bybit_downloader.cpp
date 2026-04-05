@@ -369,6 +369,10 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
     }
 
     std::vector<Instrument> exchangeSymbols = m_p->bybitClient->getInstrumentsInfo(category);
+    {
+        const auto closedSymbols = m_p->bybitClient->getInstrumentsInfo(category, "", false, "Closed");
+        exchangeSymbols.insert(exchangeSymbols.end(), closedSymbols.begin(), closedSymbols.end());
+    }
 
     // Build set of all known symbols from exchange for filesystem-based delisting detection
     std::set<std::string> exchangeSymbolSet;
@@ -627,7 +631,11 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
         spdlog::info(fmt::format("Updating symbols: {}", fmt::join(symbols, ", ")));
     }
 
-    const auto instrumentsInfo = m_p->bybitClient->getInstrumentsInfo(Category::linear);
+    auto instrumentsInfo = m_p->bybitClient->getInstrumentsInfo(Category::linear);
+    {
+        const auto closedSymbols = m_p->bybitClient->getInstrumentsInfo(Category::linear, "", false, "Closed");
+        instrumentsInfo.insert(instrumentsInfo.end(), closedSymbols.begin(), closedSymbols.end());
+    }
 
     // Build set of all known symbols from exchange for filesystem-based delisting detection
     std::set<std::string> exchangeSymbolSet;
