@@ -585,10 +585,11 @@ void MEXCFuturesDownloader::updateMarketData(const std::string &dirPath, const s
             if (!allSymbols.contains(symbol) && !activeSymbols.contains(symbol)) {
                 if (m_p->deleteDelistedData) {
                     symbolsToDelete.push_back(symbol);
+                    spdlog::info(fmt::format("Symbol: {} is delisted, scheduling for deletion", symbol));
                 } else {
                     tempSymbols.push_back(symbol);
+                    spdlog::info(fmt::format("Symbol: {} is delisted, attempting download of historical data", symbol));
                 }
-                spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", symbol));
             } else if (m_p->deleteDelistedData && !activeSymbols.contains(symbol)) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format("Symbol: {} is not active (delisted), scheduling for deletion", symbol));
@@ -939,10 +940,11 @@ void MEXCFuturesDownloader::updateFundingRateData(const std::string &dirPath, co
             if (!allSymbols.contains(symbol) && !activeSymbols.contains(symbol)) {
                 if (m_p->deleteDelistedData) {
                     symbolsToDelete.push_back(symbol);
+                    spdlog::info(fmt::format("Symbol: {} is delisted, scheduling for deletion", symbol));
                 } else {
                     tempSymbols.push_back(symbol);
+                    spdlog::info(fmt::format("Symbol: {} is delisted, attempting download of historical data", symbol));
                 }
-                spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", symbol));
             } else if (m_p->deleteDelistedData && !activeSymbols.contains(symbol)) {
                 symbolsToDelete.push_back(symbol);
                 spdlog::info(fmt::format("Symbol: {} is not active (delisted), scheduling for deletion", symbol));

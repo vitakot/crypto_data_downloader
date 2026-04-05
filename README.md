@@ -42,6 +42,15 @@ MEXC API has **undocumented limits** for historical candlestick data:
 
 > **Recommendation:** Use **1h (hourly)** or larger intervals for complete MEXC historical data.
 
+#### MEXC Delisted Symbols
+
+MEXC Futures API does not provide a bulk endpoint for delisted contracts — the `/api/v1/contract/detail` endpoint returns only active symbols. However, historical data for delisted symbols **is still available** when queried individually.
+
+To download data for delisted MEXC futures symbols, maintain your own list of delisted symbols and pass it via the `-s` parameter:
+
+```bash
+./crypto_data_downloader -e mexc -c f -s "HOOK_USDT,BNKR_USDT,LUNA2USDT" -o /data/mexc
+```
 
 ## Requirements
 
