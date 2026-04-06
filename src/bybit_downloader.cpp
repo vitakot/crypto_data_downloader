@@ -422,6 +422,10 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
             if (it == exchangeSymbols.end()) {
                 if (m_p->deleteDelistedData) {
                     symbolsToDelete.push_back(sym);
+                } else if (m_p->marketCategory == MarketCategory::Spot) {
+                    // Spot: status=Closed bulk call may not return all delisted symbols;
+                    // attempt download anyway since kline API still serves historical data
+                    tempSymbols.push_back(sym);
                 }
                 spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", sym));
             } else if (it->contractStatus != ContractStatus::Trading) {
