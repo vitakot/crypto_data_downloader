@@ -359,6 +359,8 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
 
     // Map symbol -> deliveryTime for delisted symbols (used as upper time bound)
     std::map<std::string, int64_t> symbolDeliveryDates;
+    // Spot delisted symbols whose deliveryTime must be fetched from public.bybit.com
+    std::set<std::string> delistedSpotSymbols;
 
     spdlog::info(fmt::format("Symbols directory: {}", finalPath.string()));
 
@@ -387,8 +389,12 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
                     symbolsToDelete.push_back(el.symbol);
                 } else {
                     symbolsToUpdate.push_back(el.symbol);
-                    if (el.contractStatus != ContractStatus::Trading && el.deliveryTime > 0) {
-                        symbolDeliveryDates[el.symbol] = el.deliveryTime;
+                    if (el.contractStatus != ContractStatus::Trading) {
+                        if (el.deliveryTime > 0) {
+                            symbolDeliveryDates[el.symbol] = el.deliveryTime;
+                        } else if (m_p->marketCategory == MarketCategory::Spot) {
+                            delistedSpotSymbols.insert(el.symbol);
+                        }
                     }
                 }
             }
@@ -426,6 +432,7 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
                     // Spot: status=Closed bulk call may not return all delisted symbols;
                     // attempt download anyway since kline API still serves historical data
                     tempSymbols.push_back(sym);
+                    delistedSpotSymbols.insert(sym);
                 }
                 spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", sym));
             } else if (it->contractStatus != ContractStatus::Trading) {
@@ -435,6 +442,8 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
                     tempSymbols.push_back(it->symbol);
                     if (it->deliveryTime > 0) {
                         symbolDeliveryDates[it->symbol] = it->deliveryTime;
+                    } else if (m_p->marketCategory == MarketCategory::Spot) {
+                        delistedSpotSymbols.insert(it->symbol);
                     }
                 }
             } else {
@@ -448,7 +457,7 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
     for (const auto &s: symbolsToUpdate) {
         futures.push_back(
             std::async(std::launch::async,
-                       [finalPath, this, &bybitCandleInterval, &barSizeInMinutes, &category, &csvDirName, &t6DirName, convertToT6, &symbolDeliveryDates](
+                       [finalPath, this, &bybitCandleInterval, &barSizeInMinutes, &category, &csvDirName, &t6DirName, convertToT6, &symbolDeliveryDates, &delistedSpotSymbols](
                    const std::string &symbol,
                    Semaphore &maxJobs) -> std::filesystem::path {
                            std::scoped_lock w(maxJobs);
@@ -484,6 +493,14 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
                            auto endTimestamp = nowTimestamp;
                            if (const auto dit = symbolDeliveryDates.find(symbol); dit != symbolDeliveryDates.end()) {
                                endTimestamp = dit->second;
+                           } else if (delistedSpotSymbols.contains(symbol)) {
+                               // Spot delisted: fetch the actual last trade timestamp from the daily gz file.
+                               // Round up to the next candle boundary so the pop_back condition in
+                               // getHistoricalPrices does not remove the last complete candle.
+                               if (const auto ts = m_p->bybitClient->fetchLastTimestampForDelistedSpotSymbol(symbol); ts > 0) {
+                                   const int64_t intervalMs = static_cast<int64_t>(barSizeInMinutes) * 60000LL;
+                                   endTimestamp = ((ts / intervalMs) + 1) * intervalMs;
+                               }
                            }
 
                            spdlog::info(fmt::format("Updating candles for symbol: {}...", symbol));
@@ -506,11 +523,10 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
                            constexpr int maxRetries = 5;
                            for (int attempt = 0; attempt < maxRetries; ++attempt) {
                                try {
-                                   /// Add 1000 ms to fromTimeStamp so that we start with the next candle (1ms - 999ms does not work)
                                    const auto candles = m_p->bybitClient->getHistoricalPrices(category,
                                        symbol,
                                        bybitCandleInterval,
-                                       fromTimeStamp + 1000,
+                                       fromTimeStamp,
                                        endTimestamp, 200, [symbolFilePathCsv, symbol, fromTimeStamp](const std::vector<Candle> &cnd) {
                                            if (!cnd.empty()) {
                                                if (!P::writeCandlesToCSVFile(cnd, symbolFilePathCsv.string(),fromTimeStamp)) {
