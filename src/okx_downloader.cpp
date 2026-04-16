@@ -839,25 +839,119 @@ void OKXDownloader::updateFundingRateData(const std::string &dirPath,
 
                            spdlog::info(fmt::format("Updating FR for symbol: {}...", symbol));
 
-                           const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
+                           int64_t fromTimeStamp = P::checkFundingRatesCSVFile(symbolFilePathCsv.string());
 
-                           const auto fr = m_p->okxClient->getFundingRates(symbol, fromTimeStamp, nowTimestamp,
-                                                                           1000);
+                           // Extract instFamily from symbol ("BTC-USDT-SWAP" -> "BTC-USDT")
+                           std::string instFamily;
+                           const auto lastDash = symbol.rfind('-');
+                           if (lastDash != std::string::npos) {
+                               instFamily = symbol.substr(0, lastDash);
+                           } else {
+                               instFamily = symbol;
+                           }
 
                            try {
-                               if (!fr.empty()) {
-                                   if (fr.size() == 1) {
-                                       if (fromTimeStamp == fr.front().fundingTime) {
-                                           spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
-                                           return symbolFilePathCsv;
+                               // OKX API limit: max 20 months for monthly aggregation, use 19 to be safe
+                               constexpr int64_t maxMonthlyRangeMs = 19LL * 30 * 24 * 60 * 60 * 1000;
+
+                               int64_t currentStart = fromTimeStamp;
+                               int64_t totalNewRates = 0;
+                               int64_t lastSavedTimestamp = fromTimeStamp;
+
+                               // 1. Download historical data via bulk ZIP files (monthly)
+                               while (currentStart < nowTimestamp) {
+                                   int64_t currentEnd = std::min(currentStart + maxMonthlyRangeMs, nowTimestamp);
+
+                                   const auto history = m_p->okxClient->getMarketDataHistory(
+                                       MarketDataModule::FundingRate,
+                                       InstrumentType::SWAP,
+                                       instFamily,
+                                       DateAggrType::monthly,
+                                       currentStart,
+                                       currentEnd);
+
+                                   if (history.details.empty()) {
+                                       currentStart = currentEnd;
+                                       continue;
+                                   }
+
+                                   // Collect all files and sort by date (oldest first)
+                                   std::vector<MarketDataFileInfo> allFiles;
+                                   for (const auto &detail : history.details) {
+                                       for (const auto &fileInfo : detail.groupDetails) {
+                                           allFiles.push_back(fileInfo);
                                        }
                                    }
 
-                                   if (P::writeFundingRatesToCSVFile(fr, symbolFilePathCsv.string())) {
-                                       spdlog::info(fmt::format("CSV file for symbol: {} updated", symbol));
-                                       return symbolFilePathCsv;
+                                   std::ranges::sort(allFiles, [](const MarketDataFileInfo &a, const MarketDataFileInfo &b) {
+                                       return a.dateTs < b.dateTs;
+                                   });
+
+                                   for (const auto &fileInfo : allFiles) {
+                                       // Skip files older than what we already have (month + ~31 days)
+                                       if (fileInfo.dateTs + 31LL * 24 * 60 * 60 * 1000 <= lastSavedTimestamp) {
+                                           continue;
+                                       }
+
+                                       const auto zipData = RESTClient::downloadMarketDataFile(fileInfo.url);
+                                       const auto csvData = okx::utils::extractZip(zipData);
+                                       auto rates = okx::utils::parseFundingRateCsv(csvData);
+
+                                       if (rates.empty()) {
+                                           continue;
+                                       }
+
+                                       std::ranges::sort(rates, [](const FundingRate &a, const FundingRate &b) {
+                                           return a.fundingTime < b.fundingTime;
+                                       });
+
+                                       std::vector<FundingRate> newRates;
+                                       for (const auto &rate : rates) {
+                                           if (rate.fundingTime > lastSavedTimestamp) {
+                                               newRates.push_back(rate);
+                                           }
+                                       }
+
+                                       if (!newRates.empty()) {
+                                           P::writeFundingRatesToCSVFile(newRates, symbolFilePathCsv.string());
+                                           totalNewRates += static_cast<int64_t>(newRates.size());
+                                           lastSavedTimestamp = newRates.back().fundingTime;
+                                       }
+                                   }
+
+                                   currentStart = currentEnd;
+                               }
+
+                               // 2. Fill the gap between last bulk file and now using REST API
+                               if (lastSavedTimestamp < nowTimestamp) {
+                                   auto recentRates = m_p->okxClient->getFundingRates(
+                                       symbol, lastSavedTimestamp, nowTimestamp, 1000);
+
+                                   if (!recentRates.empty()) {
+                                       std::ranges::sort(recentRates, [](const FundingRate &a, const FundingRate &b) {
+                                           return a.fundingTime < b.fundingTime;
+                                       });
+
+                                       std::vector<FundingRate> newRates;
+                                       for (const auto &rate : recentRates) {
+                                           if (rate.fundingTime > lastSavedTimestamp) {
+                                               newRates.push_back(rate);
+                                           }
+                                       }
+
+                                       if (!newRates.empty()) {
+                                           P::writeFundingRatesToCSVFile(newRates, symbolFilePathCsv.string());
+                                           totalNewRates += static_cast<int64_t>(newRates.size());
+                                       }
                                    }
                                }
+
+                               if (totalNewRates > 0) {
+                                   spdlog::info(fmt::format("CSV file for symbol: {} updated ({} new FR records)",
+                                                            symbol, totalNewRates));
+                               }
+                               return symbolFilePathCsv;
+
                            } catch (const std::exception &e) {
                                spdlog::warn(fmt::format("Updating symbol: {} failed, reason: {}",
                                                         symbol, e.what()));
