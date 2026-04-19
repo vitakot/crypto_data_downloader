@@ -46,16 +46,6 @@ struct OKXDownloader::P {
 
     static bool writeFundingRatesToCSVFile(const std::vector<FundingRate> &fr, const std::string &path);
 
-    /**
-     * Discover all symbols available in OKX bulk download (including delisted ones)
-     * by downloading one recent "allswap" or "allspot" daily ZIP and extracting unique
-     * instrument IDs from the first column of the CSV inside.
-     * @param client RESTClient to use for API queries
-     * @param instType Instrument type (SPOT or SWAP)
-     * @return set of instrument IDs (e.g. "BTC-USDT-SWAP", "DGB-USDT-SWAP")
-     */
-    static std::set<std::string> discoverBulkDownloadSymbols(const RESTClient &client, InstrumentType instType);
-
     explicit P(const std::uint32_t maxJobs, const bool deleteDelistedData) : okxClient(
                                                                                  std::make_unique<RESTClient>(
                                                                                      "", "", "")),
@@ -63,94 +53,6 @@ struct OKXDownloader::P {
                                                                              deleteDelistedData(deleteDelistedData) {
     }
 };
-
-std::set<std::string> OKXDownloader::P::discoverBulkDownloadSymbols(const RESTClient &client,
-                                                                     const InstrumentType instType) {
-    std::set<std::string> symbols;
-
-    try {
-        const auto nowTimestamp = std::chrono::seconds(std::time(nullptr)).count() * 1000;
-        // Query a recent 5-day window to find at least one allswap/allspot ZIP
-        constexpr int64_t fiveDaysMs = 5LL * 24 * 60 * 60 * 1000;
-        const auto beginTs = nowTimestamp - fiveDaysMs;
-
-        const auto history = client.getMarketDataHistory(
-            MarketDataModule::Candles1m,
-            instType,
-            "",  // empty instFamilyList = get "all" ZIPs
-            DateAggrType::daily,
-            beginTs,
-            nowTimestamp);
-
-        if (history.details.empty()) {
-            spdlog::warn("No bulk download data available for symbol discovery");
-            return symbols;
-        }
-
-        // Find the most recent file
-        std::string latestUrl;
-        int64_t latestTs = 0;
-
-        for (const auto &detail : history.details) {
-            for (const auto &fileInfo : detail.groupDetails) {
-                if (fileInfo.dateTs > latestTs) {
-                    latestTs = fileInfo.dateTs;
-                    latestUrl = fileInfo.url;
-                }
-            }
-        }
-
-        if (latestUrl.empty()) {
-            return symbols;
-        }
-
-        spdlog::info("Discovering symbols from bulk download: {}", latestUrl.substr(latestUrl.rfind('/') + 1));
-
-        // Download the ZIP
-        const auto zipData = RESTClient::downloadMarketDataFile(latestUrl);
-        const auto csvData = okx::utils::extractZip(zipData);
-
-        if (csvData.empty()) {
-            return symbols;
-        }
-
-        // Parse just the first column to extract unique instrument IDs
-        const std::string csvContent(reinterpret_cast<const char *>(csvData.data()), csvData.size());
-        std::istringstream stream(csvContent);
-        std::string line;
-        bool isFirstLine = true;
-
-        while (std::getline(stream, line)) {
-            if (isFirstLine) {
-                isFirstLine = false;
-                continue; // skip header
-            }
-
-            if (line.empty()) {
-                continue;
-            }
-
-            const auto commaPos = line.find(',');
-            if (commaPos != std::string::npos) {
-                auto instId = line.substr(0, commaPos);
-                // Remove trailing \r if present
-                if (!instId.empty() && instId.back() == '\r') {
-                    instId.pop_back();
-                }
-                if (!instId.empty() && instId.find("USDT") != std::string::npos) {
-                    symbols.insert(instId);
-                }
-            }
-        }
-
-        spdlog::info("Discovered {} symbols from bulk download (including delisted)", symbols.size());
-
-    } catch (const std::exception &e) {
-        spdlog::warn("Failed to discover bulk download symbols: {}", e.what());
-    }
-
-    return symbols;
-}
 
 OKXDownloader::OKXDownloader(std::uint32_t maxJobs, const MarketCategory marketCategory, bool deleteDelistedData) : m_p(
     std::make_unique<P>(maxJobs, deleteDelistedData)) {
@@ -497,18 +399,6 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                     symbolsToDelete.push_back(el.instId);
                 } else {
                     symbolsToUpdate.push_back(el.instId);
-                }
-            }
-        }
-
-        // Discover delisted symbols from bulk download and add them to download list
-        if (!m_p->deleteDelistedData) {
-            const auto bulkSymbols = P::discoverBulkDownloadSymbols(*m_p->okxClient, instrumentType);
-            std::set<std::string> currentSymbolSet(symbolsToUpdate.begin(), symbolsToUpdate.end());
-            for (const auto &sym : bulkSymbols) {
-                if (!currentSymbolSet.contains(sym)) {
-                    symbolsToUpdate.push_back(sym);
-                    spdlog::info("Adding delisted symbol from bulk download: {}", sym);
                 }
             }
         }
@@ -934,18 +824,6 @@ void OKXDownloader::updateFundingRateData(const std::string &dirPath,
                     symbolsToDelete.push_back(el.instId);
                 } else {
                     symbolsToUpdate.push_back(el.instId);
-                }
-            }
-        }
-
-        // Discover delisted symbols from bulk download and add them to download list
-        if (!m_p->deleteDelistedData) {
-            const auto bulkSymbols = P::discoverBulkDownloadSymbols(*m_p->okxClient, InstrumentType::SWAP);
-            std::set<std::string> currentSymbolSet(symbolsToUpdate.begin(), symbolsToUpdate.end());
-            for (const auto &sym : bulkSymbols) {
-                if (!currentSymbolSet.contains(sym)) {
-                    symbolsToUpdate.push_back(sym);
-                    spdlog::info("Adding delisted symbol from bulk download: {}", sym);
                 }
             }
         }
