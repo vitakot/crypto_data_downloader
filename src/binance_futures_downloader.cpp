@@ -226,6 +226,8 @@ void BinanceFuturesDownloader::updateMarketData(const std::string &dirPath, cons
             if (it == exchangeInfo.symbols.end()) {
                 if (m_p->deleteDelistedData) {
                     symbolsToDelete.push_back(symbol);
+                } else {
+                    tempSymbols.push_back(symbol);
                 }
                 spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", symbol));
             } else if (it->status != ContractStatus::TRADING) {
@@ -481,6 +483,8 @@ void BinanceFuturesDownloader::updateFundingRateData(const std::string &dirPath,
             if (it == exchangeInfo.symbols.end()) {
                 if (m_p->deleteDelistedData) {
                     symbolsToDelete.push_back(symbol);
+                } else {
+                    tempSymbols.push_back(symbol);
                 }
                 spdlog::info(fmt::format("Symbol: {} not found on Exchange, probably delisted", symbol));
             } else if (it->status != ContractStatus::TRADING) {

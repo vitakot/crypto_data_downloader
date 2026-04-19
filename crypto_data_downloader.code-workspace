@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../../Stonky/utils"
+		},
+		{
+			"path": "../../../Stonky/data_server"
+		}
+	],
+	"settings": {}
+}
