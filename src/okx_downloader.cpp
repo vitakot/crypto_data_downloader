@@ -633,20 +633,75 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                                fromTimeStamp = instrumentListTime;
                            }
 
-                           try {
-                               // OKX API limits: max 20 days for daily, max 20 months for monthly
-                               // Use 19 days to be safe (OKX may count calendar days differently)
-                               constexpr int64_t maxDailyRangeMs = 19LL * 24 * 60 * 60 * 1000; // 19 days in ms
+                            try {
+                                // OKX API limits: max 20 days for daily, max 20 months for monthly
+                                constexpr int64_t maxMonthlyRangeMs = 19LL * 30 * 24 * 60 * 60 * 1000;
+                                constexpr int64_t maxDailyRangeMs = 19LL * 24 * 60 * 60 * 1000; // 19 days in ms
 
-                               int64_t currentStart = fromTimeStamp;
-                               int64_t totalNewCandles = 0;
-                               int64_t lastSavedTimestamp = fromTimeStamp;
-                               
-                               while (currentStart < nowTimestamp) {
-                                   int64_t currentEnd = std::min(currentStart + maxDailyRangeMs, nowTimestamp);
+                                int64_t currentStart = fromTimeStamp;
+                                int64_t totalNewCandles = 0;
+                                int64_t lastSavedTimestamp = fromTimeStamp;
 
+                                // 1. Download historical data via bulk ZIP files (Monthly intervals)
+                                while (currentStart < nowTimestamp - 30LL * 24 * 60 * 60 * 1000) {
+                                    int64_t currentEnd = std::min(currentStart + maxMonthlyRangeMs, nowTimestamp);
+                                    auto history = m_p->okxClient->getMarketDataHistory(
+                                        MarketDataModule::Candles1m,
+                                        instrumentType,
+                                        instFamilyOrId,
+                                        DateAggrType::monthly,
+                                        currentStart,
+                                        currentEnd);
 
+                                    currentStart = currentEnd;
 
+                                    if (history.details.empty()) {
+                                        continue;
+                                    }
+
+                                    std::vector<MarketDataFileInfo> allFiles;
+                                    for (const auto &detail: history.details) {
+                                        for (const auto &fileInfo: detail.groupDetails) {
+                                            allFiles.push_back(fileInfo);
+                                        }
+                                    }
+
+                                    std::ranges::sort(allFiles, [](const MarketDataFileInfo &a, const MarketDataFileInfo &b) {
+                                        return a.dateTs < b.dateTs;
+                                    });
+
+                                    for (const auto &fileInfo: allFiles) {
+                                        if (fileInfo.dateTs + 30LL * 24 * 60 * 60 * 1000 > lastSavedTimestamp) {
+                                            const auto zipData = RESTClient::downloadMarketDataFile(fileInfo.url);
+                                            const auto csvData = okx::utils::extractZip(zipData);
+                                            auto candles = okx::utils::parseCandlesCsv(csvData);
+
+                                            if (!candles.empty()) {
+                                                std::ranges::sort(candles, [](const Candle &a, const Candle &b) {
+                                                    return a.ts < b.ts;
+                                                });
+                                                
+                                                std::vector<Candle> newCandles;
+                                                for (const auto &candle : candles) {
+                                                    if (candle.ts > lastSavedTimestamp) {
+                                                        newCandles.push_back(candle);
+                                                    }
+                                                }
+                                                
+                                                if (!newCandles.empty()) {
+                                                    P::writeCandlesToCSVFile(newCandles, symbolFilePathCsv.string(), false);
+                                                    totalNewCandles += static_cast<int64_t>(newCandles.size());
+                                                    lastSavedTimestamp = newCandles.back().ts;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 2. Download recent historical data via bulk ZIP files (Daily intervals)
+                                while (currentStart < nowTimestamp) {
+                                    int64_t currentEnd = std::min(currentStart + maxDailyRangeMs, nowTimestamp);
+                                   
                                    // Get list of files for this date range
                                    const auto history = m_p->okxClient->getMarketDataHistory(
                                        MarketDataModule::Candles1m,
