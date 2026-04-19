@@ -29,19 +29,42 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
 
 using namespace vk;
 
-std::vector<std::string> parseZorroAssetList(const std::string &path) {
+std::vector<std::string> parseSymbolsFile(const std::string &path) {
     std::vector<std::string> retVal;
+
+    // Detect format from the header row
+    std::ifstream probe(path);
+    if (!probe.is_open()) {
+        spdlog::warn(fmt::format("Could not open symbols file: {}", path));
+        return retVal;
+    }
+    std::string header;
+    std::getline(probe, header);
+    probe.close();
+
+    std::string column;
+    if (header.find("Symbol") != std::string::npos) {
+        column = "Symbol";   // Zorro Assets file
+    } else if (header.find("symbol") != std::string::npos) {
+        column = "symbol";   // exchange info CSV (symbol,available_since,available_to)
+    } else {
+        spdlog::warn(fmt::format("Unrecognised CSV header in file: {}", path));
+        return retVal;
+    }
 
     try {
         io::CSVReader<1> in(path);
         std::string symbolStr;
-        in.read_header(io::ignore_extra_column, "Symbol");
-
+        if (column == "Symbol") {
+            in.read_header(io::ignore_extra_column, "Symbol");
+        } else {
+            in.read_header(io::ignore_extra_column, "symbol");
+        }
         while (in.read_row(symbolStr)) {
             retVal.push_back(symbolStr);
         }
     } catch (std::exception &e) {
-        spdlog::warn(fmt::format("Could not parse Zorro asset file: {}, reason: {}", path, e.what()));
+        spdlog::warn(fmt::format("Could not parse symbols file: {}, reason: {}", path, e.what()));
     }
     return retVal;
 }
@@ -72,7 +95,7 @@ int main(int argc, char **argv) {
             ("s,symbols",
              R"(Symbols of assets to download, example: -s "BTCUSDT,ETHUSDT", "all" means All symbols, mutually exclusive with parameter -a)",
              cxxopts::value<std::vector<std::string> >()->default_value({"all"}))
-            ("a,assets_file", R"(Path to Zorro Assets file, mutually exclusive with parameter -s)",
+            ("a,assets_file", R"(Path to a symbols CSV file: either a Zorro Assets file (header: Symbol) or an exchange info CSV (header: symbol,available_since,available_to). Mutually exclusive with parameter -s)",
              cxxopts::value<std::string>()->default_value(""))
             ("j,jobs", R"(Maximum number of jobs to run in parallel, example -j 8)",
              cxxopts::value<std::uint32_t>()->default_value(std::to_string(maxJobs)))
@@ -112,10 +135,10 @@ int main(int argc, char **argv) {
                 symbols.clear();
             }
         } else {
-            symbols = parseZorroAssetList(assetFile);
+            symbols = parseSymbolsFile(assetFile);
 
             if (symbols.empty()) {
-                spdlog::info("Zorro asset list is empty, updating all exchange symbols");
+                spdlog::info("Symbols file is empty or unreadable, updating all exchange symbols");
             }
         }
 
