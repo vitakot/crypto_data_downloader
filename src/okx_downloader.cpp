@@ -533,136 +533,116 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                                 int64_t lastSavedTimestamp = fromTimeStamp;
 
                                 // 1. Download historical data via bulk ZIP files (Monthly intervals)
-                                while (currentStart < nowTimestamp - 30LL * 24 * 60 * 60 * 1000) {
-                                    int64_t currentEnd = std::min(currentStart + maxMonthlyRangeMs, nowTimestamp);
-                                    auto history = m_p->okxClient->getMarketDataHistory(
-                                        MarketDataModule::Candles1m,
-                                        instrumentType,
-                                        instFamilyOrId,
-                                        DateAggrType::monthly,
-                                        currentStart,
-                                        currentEnd);
+                                    while (currentStart < nowTimestamp - 30LL * 24 * 60 * 60 * 1000) {
+                                        int64_t currentEnd = std::min(currentStart + maxMonthlyRangeMs, nowTimestamp);
+                                        auto history = m_p->okxClient->getMarketDataHistory(
+                                            MarketDataModule::Candles1m,
+                                            instrumentType,
+                                            instFamilyOrId,
+                                            DateAggrType::monthly,
+                                            currentStart,
+                                            currentEnd);
 
-                                    currentStart = currentEnd;
+                                        currentStart = currentEnd;
 
-                                    if (history.details.empty()) {
-                                        continue;
-                                    }
-
-                                    std::vector<MarketDataFileInfo> allFiles;
-                                    for (const auto &detail: history.details) {
-                                        for (const auto &fileInfo: detail.groupDetails) {
-                                            allFiles.push_back(fileInfo);
+                                        if (history.details.empty()) {
+                                            continue;
                                         }
-                                    }
 
-                                    std::ranges::sort(allFiles, [](const MarketDataFileInfo &a, const MarketDataFileInfo &b) {
-                                        return a.dateTs < b.dateTs;
-                                    });
+                                        std::vector<MarketDataFileInfo> allFiles;
+                                        for (const auto &detail: history.details) {
+                                            for (const auto &fileInfo: detail.groupDetails) {
+                                                allFiles.push_back(fileInfo);
+                                            }
+                                        }
 
-                                    for (const auto &fileInfo: allFiles) {
-                                        if (fileInfo.dateTs + 30LL * 24 * 60 * 60 * 1000 > lastSavedTimestamp) {
-                                            const auto zipData = RESTClient::downloadMarketDataFile(fileInfo.url);
-                                            const auto csvData = okx::utils::extractZip(zipData);
-                                            auto candles = okx::utils::parseCandlesCsv(csvData);
+                                        std::ranges::sort(allFiles, [](const MarketDataFileInfo &a, const MarketDataFileInfo &b) {
+                                            return a.dateTs < b.dateTs;
+                                        });
 
-                                            if (!candles.empty()) {
-                                                std::ranges::sort(candles, [](const Candle &a, const Candle &b) {
-                                                    return a.ts < b.ts;
-                                                });
-                                                
-                                                std::vector<Candle> newCandles;
-                                                for (const auto &candle : candles) {
-                                                    if (candle.ts > lastSavedTimestamp) {
-                                                        newCandles.push_back(candle);
+                                        for (const auto &fileInfo: allFiles) {
+                                            if (fileInfo.dateTs + 30LL * 24 * 60 * 60 * 1000 > lastSavedTimestamp) {
+                                                const auto zipData = RESTClient::downloadMarketDataFile(fileInfo.url);
+                                                const auto csvData = okx::utils::extractZip(zipData);
+                                                auto candles = okx::utils::parseCandlesCsv(csvData);
+
+                                                if (!candles.empty()) {
+                                                    std::ranges::sort(candles, [](const Candle &a, const Candle &b) {
+                                                        return a.ts < b.ts;
+                                                    });
+                                                    std::vector<Candle> newCandles;
+                                                    for (const auto &candle : candles) {
+                                                        if (candle.ts > lastSavedTimestamp)
+                                                            newCandles.push_back(candle);
                                                     }
-                                                }
-                                                
-                                                if (!newCandles.empty()) {
-                                                    P::writeCandlesToCSVFile(newCandles, symbolFilePathCsv.string(), false);
-                                                    totalNewCandles += static_cast<int64_t>(newCandles.size());
-                                                    lastSavedTimestamp = newCandles.back().ts;
+                                                    if (!newCandles.empty()) {
+                                                        P::writeCandlesToCSVFile(newCandles, symbolFilePathCsv.string(), false);
+                                                        totalNewCandles += static_cast<int64_t>(newCandles.size());
+                                                        lastSavedTimestamp = newCandles.back().ts;
+                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                }
 
-                                // 2. Download recent historical data via bulk ZIP files (Daily intervals)
-                                while (currentStart < nowTimestamp) {
-                                    int64_t currentEnd = std::min(currentStart + maxDailyRangeMs, nowTimestamp);
-                                   
-                                   // Get list of files for this date range
-                                   const auto history = m_p->okxClient->getMarketDataHistory(
-                                       MarketDataModule::Candles1m,
-                                       instrumentType,
-                                       instFamilyOrId,
-                                       DateAggrType::daily,
-                                       currentStart,
-                                       currentEnd);
+                                    // 2. Download recent historical data via bulk ZIP files (Daily intervals)
+                                    while (currentStart < nowTimestamp) {
+                                        int64_t currentEnd = std::min(currentStart + maxDailyRangeMs, nowTimestamp);
 
-                                   if (history.details.empty()) {
-                                       currentStart = currentEnd;
-                                       continue;
-                                   }
+                                        const auto history = m_p->okxClient->getMarketDataHistory(
+                                            MarketDataModule::Candles1m,
+                                            instrumentType,
+                                            instFamilyOrId,
+                                            DateAggrType::daily,
+                                            currentStart,
+                                            currentEnd);
 
-                                   // Collect all files and sort by date (oldest first)
-                                   std::vector<MarketDataFileInfo> allFiles;
-                                   for (const auto &detail : history.details) {
-                                       for (const auto &fileInfo : detail.groupDetails) {
-                                           allFiles.push_back(fileInfo);
-                                       }
-                                   }
+                                        if (history.details.empty()) {
+                                            currentStart = currentEnd;
+                                            continue;
+                                        }
 
-                                   std::ranges::sort(allFiles, [](const MarketDataFileInfo &a, const MarketDataFileInfo &b) {
-                                       return a.dateTs < b.dateTs;
-                                   });
+                                        std::vector<MarketDataFileInfo> allFiles;
+                                        for (const auto &detail : history.details) {
+                                            for (const auto &fileInfo : detail.groupDetails) {
+                                                allFiles.push_back(fileInfo);
+                                            }
+                                        }
 
-                                   // Process each file individually (oldest first)
-                                   for (const auto &fileInfo : allFiles) {
-                                       // Skip files that are older than what we already have
-                                       // dateTs is the START of the day, so we need data where ts > lastSavedTimestamp
-                                       if (fileInfo.dateTs + 24LL * 60 * 60 * 1000 <= lastSavedTimestamp) {
-                                           continue;
-                                       }
+                                        std::ranges::sort(allFiles, [](const MarketDataFileInfo &a, const MarketDataFileInfo &b) {
+                                            return a.dateTs < b.dateTs;
+                                        });
 
-                                       // Download ZIP file
-                                       const auto zipData = RESTClient::downloadMarketDataFile(fileInfo.url);
+                                        for (const auto &fileInfo : allFiles) {
+                                            if (fileInfo.dateTs + 24LL * 60 * 60 * 1000 <= lastSavedTimestamp)
+                                                continue;
 
-                                       // Extract CSV from ZIP
-                                       const auto csvData = okx::utils::extractZip(zipData);
+                                            const auto zipData = RESTClient::downloadMarketDataFile(fileInfo.url);
+                                            const auto csvData = okx::utils::extractZip(zipData);
+                                            auto candles = okx::utils::parseCandlesCsv(csvData);
 
-                                       // Parse CSV to candles
-                                       auto candles = okx::utils::parseCandlesCsv(csvData);
+                                            if (candles.empty())
+                                                continue;
 
-                                       if (candles.empty()) {
-                                           continue;
-                                       }
+                                            std::ranges::sort(candles, [](const Candle &a, const Candle &b) {
+                                                return a.ts < b.ts;
+                                            });
 
-                                       // Sort by timestamp
-                                       std::ranges::sort(candles, [](const Candle &a, const Candle &b) {
-                                           return a.ts < b.ts;
-                                       });
+                                            std::vector<Candle> newCandles;
+                                            for (const auto &candle : candles) {
+                                                if (candle.ts > lastSavedTimestamp)
+                                                    newCandles.push_back(candle);
+                                            }
 
-                                       // Filter out candles we already have
-                                       std::vector<Candle> newCandles;
-                                       for (const auto &candle : candles) {
-                                           if (candle.ts > lastSavedTimestamp) {
-                                               newCandles.push_back(candle);
-                                           }
-                                       }
+                                            if (!newCandles.empty()) {
+                                                P::writeCandlesToCSVFile(newCandles, symbolFilePathCsv.string(), false);
+                                                totalNewCandles += static_cast<int64_t>(newCandles.size());
+                                                lastSavedTimestamp = newCandles.back().ts;
+                                            }
+                                        }
 
-                                       if (!newCandles.empty()) {
-                                           P::writeCandlesToCSVFile(newCandles, symbolFilePathCsv.string(), false);
-                                           totalNewCandles += static_cast<int64_t>(newCandles.size());
-
-                                           // Update last saved timestamp for next file
-                                           lastSavedTimestamp = newCandles.back().ts;
-                                       }
-                                   }
-
-                                   currentStart = currentEnd;
-                               }
+                                        currentStart = currentEnd;
+                                    }
 
                                // Fill the gap between last downloaded file and now using REST API
                                // The file-based endpoint only has complete days, so recent data needs REST API
@@ -703,10 +683,13 @@ void OKXDownloader::updateMarketData(const std::string &dirPath,
                                if (std::filesystem::exists(symbolFilePathCsv)) {
                                    return symbolFilePathCsv;
                                }
+                               if (totalNewCandles == 0 && !std::filesystem::exists(symbolFilePathCsv)) {
+                                   spdlog::warn(fmt::format("No data available for symbol: {}", symbol));
+                               }
                            } catch (const std::exception &e) {
                                const std::string errStr = e.what();
                                if (errStr.find("code: 51001") != std::string::npos || errStr.find("code: 51000") != std::string::npos) {
-                                   spdlog::debug("REST API confirmed symbol {} is delisted (no latest data)", symbol);
+                                   spdlog::info(fmt::format("Symbol: {} is delisted or does not exist on OKX", symbol));
                                } else {
                                    spdlog::warn(fmt::format("Updating candles for symbol: {} failed, reason: {}",
                                                             symbol, e.what()));
