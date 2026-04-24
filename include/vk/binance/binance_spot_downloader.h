@@ -3,7 +3,7 @@ Binance Spot Market Data Downloader
 
 Licensed under the MIT License <http://opensource.org/licenses/MIT>.
 SPDX-License-Identifier: MIT
-Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@gmail.com>.
+Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 */
 
 #ifndef INCLUDE_VK_BINANCE_SPOT_DOWNLOADER_H
