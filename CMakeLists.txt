@@ -26,14 +26,14 @@ endif ()
 include_directories(include vk_cpp_common/include binance_cpp_api/include bybit_cpp_api/include okx_cpp_api/include mexc_cpp_api/include magic_enum)
 
 set(HEADERS
-        include/vk/downloader.h
-        include/vk/binance/binance_futures_downloader.h
-        include/vk/binance/binance_spot_downloader.h
-        include/vk/binance/binance_common.h
-        include/vk/bybit/bybit_downloader.h
-        include/vk/okx/okx_downloader.h
-        include/vk/mexc/mexc_futures_downloader.h
-        include/vk/mexc/mexc_spot_downloader.h
+        include/stonky/downloader.h
+        include/stonky/binance/binance_futures_downloader.h
+        include/stonky/binance/binance_spot_downloader.h
+        include/stonky/binance/binance_common.h
+        include/stonky/bybit/bybit_downloader.h
+        include/stonky/okx/okx_downloader.h
+        include/stonky/mexc/mexc_futures_downloader.h
+        include/stonky/mexc/mexc_spot_downloader.h
 )
 
 set(SOURCES
