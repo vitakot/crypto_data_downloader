@@ -6,12 +6,12 @@ SPDX-License-Identifier: MIT
 Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 */
 
-#include "vk/bybit/bybit_downloader.h"
-#include "vk/downloader.h"
-#include "vk/bybit/bybit_rest_client.h"
-#include "vk/bybit/bybit.h"
-#include "vk/utils/utils.h"
-#include "vk/utils/semaphore.h"
+#include "stonky/bybit/bybit_downloader.h"
+#include "stonky/downloader.h"
+#include "stonky/bybit/bybit_rest_client.h"
+#include "stonky/bybit/bybit.h"
+#include "stonky/utils/utils.h"
+#include "stonky/utils/semaphore.h"
 #include "csv.h"
 #include <filesystem>
 #include <fstream>
@@ -23,9 +23,9 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 #include <future>
 #include <spdlog/fmt/ranges.h>
 
-using namespace vk::bybit;
+using namespace stonky::bybit;
 
-namespace vk {
+namespace stonky {
 struct BybitDownloader::P {
     std::unique_ptr<RESTClient> bybitClient;
     mutable Semaphore maxConcurrentConvertJobs;

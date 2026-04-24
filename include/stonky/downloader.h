@@ -6,12 +6,12 @@ SPDX-License-Identifier: MIT
 Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 */
 
-#ifndef INCLUDE_VK_DEFINITIONS_H
-#define INCLUDE_VK_DEFINITIONS_H
+#ifndef INCLUDE_STONKY_DEFINITIONS_H
+#define INCLUDE_STONKY_DEFINITIONS_H
 #include <thread>
 #include <spdlog/fmt/ostr.h>
 
-namespace vk {
+namespace stonky {
 static auto CSV_FUT_DIR = "futures/prices/csv";
 static auto CSV_FUT_FR_DIR = "futures/funding_rates/csv";
 static auto CSV_SPOT_DIR = "spot/prices/csv";
@@ -105,4 +105,4 @@ public:
 };
 }
 
-#endif //INCLUDE_VK_DEFINITIONS_H
+#endif //INCLUDE_STONKY_DEFINITIONS_H

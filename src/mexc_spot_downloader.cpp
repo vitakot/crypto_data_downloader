@@ -6,13 +6,13 @@ SPDX-License-Identifier: MIT
 Copyright (c) 2026 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 */
 
-#include "vk/mexc/mexc_spot_downloader.h"
-#include "vk/mexc/mexc_spot_rest_client.h"
-#include "vk/mexc/mexc.h"
-#include "vk/downloader.h"
-#include "vk/utils/semaphore.h"
-#include "vk/utils/utils.h"
-#include "vk/interface/exchange_enums.h"
+#include "stonky/mexc/mexc_spot_downloader.h"
+#include "stonky/mexc/mexc_spot_rest_client.h"
+#include "stonky/mexc/mexc.h"
+#include "stonky/downloader.h"
+#include "stonky/utils/semaphore.h"
+#include "stonky/utils/utils.h"
+#include "stonky/interface/exchange_enums.h"
 #include <filesystem>
 #include <fstream>
 #include <spdlog/spdlog.h>
@@ -22,10 +22,10 @@ Copyright (c) 2026 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 #include <ranges>
 #include "csv.h"
 
-using namespace vk::mexc;
-using namespace vk::mexc::spot;
+using namespace stonky::mexc;
+using namespace stonky::mexc::spot;
 
-namespace vk {
+namespace stonky {
 struct MEXCSpotDownloader::P {
     std::unique_ptr<RESTClient> mexcSpotClient;
     mutable Semaphore maxConcurrentConvertJobs;
@@ -49,7 +49,7 @@ struct MEXCSpotDownloader::P {
     // Returns the number of batches that were merged (0 if none found)
     static int recoverAndMergeTempFiles(const std::string &tempDir, const std::string &csvPath, const std::string &symbol);
 
-    static mexc::CandleInterval vkIntervalToMexcInterval(vk::CandleInterval interval);
+    static mexc::CandleInterval vkIntervalToMexcInterval(stonky::CandleInterval interval);
 
     struct CsvCandle {
         int64_t openTime{};
@@ -65,27 +65,27 @@ struct MEXCSpotDownloader::P {
     void convertFromCSVToT6(const std::vector<std::filesystem::path> &filePaths, const std::string &outDirPath) const;
 };
 
-mexc::CandleInterval MEXCSpotDownloader::P::vkIntervalToMexcInterval(const vk::CandleInterval interval) {
+mexc::CandleInterval MEXCSpotDownloader::P::vkIntervalToMexcInterval(const stonky::CandleInterval interval) {
     switch (interval) {
-        case vk::CandleInterval::_1m:
+        case stonky::CandleInterval::_1m:
             return mexc::CandleInterval::_1m;
-        case vk::CandleInterval::_5m:
+        case stonky::CandleInterval::_5m:
             return mexc::CandleInterval::_5m;
-        case vk::CandleInterval::_15m:
+        case stonky::CandleInterval::_15m:
             return mexc::CandleInterval::_15m;
-        case vk::CandleInterval::_30m:
+        case stonky::CandleInterval::_30m:
             return mexc::CandleInterval::_30m;
-        case vk::CandleInterval::_1h:
+        case stonky::CandleInterval::_1h:
             return mexc::CandleInterval::_60m; // Spot uses 60m instead of 1h
-        case vk::CandleInterval::_4h:
+        case stonky::CandleInterval::_4h:
             return mexc::CandleInterval::_4h;
-        case vk::CandleInterval::_8h:
+        case stonky::CandleInterval::_8h:
             return mexc::CandleInterval::_8h;
-        case vk::CandleInterval::_1d:
+        case stonky::CandleInterval::_1d:
             return mexc::CandleInterval::_1d;
-        case vk::CandleInterval::_1w:
+        case stonky::CandleInterval::_1w:
             return mexc::CandleInterval::_1W;
-        case vk::CandleInterval::_1M:
+        case stonky::CandleInterval::_1M:
             return mexc::CandleInterval::_1M;
         default:
             throw std::invalid_argument("Unsupported candle interval for MEXC Spot");
@@ -769,4 +769,4 @@ void MEXCSpotDownloader::convertToT6(const std::string &dirPath, const CandleInt
         m_p->convertFromCSVToT6(allCsvFiles, T6Directory.string());
     }
 }
-} // namespace vk
+} // namespace stonky

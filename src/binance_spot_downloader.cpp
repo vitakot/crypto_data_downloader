@@ -6,14 +6,14 @@ SPDX-License-Identifier: MIT
 Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 */
 
-#include "vk/binance/binance_spot_downloader.h"
-#include "vk/binance/binance_spot_rest_client.h"
-#include "vk/binance/binance_common.h"
-#include "vk/downloader.h"
-#include "vk/utils/semaphore.h"
-#include "vk/utils/utils.h"
-#include "vk/binance/binance.h"
-#include "vk/interface/exchange_enums.h"
+#include "stonky/binance/binance_spot_downloader.h"
+#include "stonky/binance/binance_spot_rest_client.h"
+#include "stonky/binance/binance_common.h"
+#include "stonky/downloader.h"
+#include "stonky/utils/semaphore.h"
+#include "stonky/utils/utils.h"
+#include "stonky/binance/binance.h"
+#include "stonky/interface/exchange_enums.h"
 #include <filesystem>
 #include <set>
 #include <spdlog/spdlog.h>
@@ -21,9 +21,9 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 #include <future>
 #include <spdlog/fmt/ranges.h>
 
-using namespace vk::binance;
+using namespace stonky::binance;
 
-namespace vk {
+namespace stonky {
 struct BinanceSpotDownloader::P {
     std::unique_ptr<spot::RESTClient> bnbSpotClient;
     std::unique_ptr<BinanceCommon> binanceCommon;

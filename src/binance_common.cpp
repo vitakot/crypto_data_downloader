@@ -6,10 +6,10 @@ SPDX-License-Identifier: MIT
 Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 */
 
-#include "vk/binance/binance_common.h"
-#include "vk/binance/binance_models.h"
-#include "vk/utils/utils.h"
-#include "vk/utils/semaphore.h"
+#include "stonky/binance/binance_common.h"
+#include "stonky/binance/binance_models.h"
+#include "stonky/utils/utils.h"
+#include "stonky/utils/semaphore.h"
 #include <filesystem>
 #include <fstream>
 #include <spdlog/spdlog.h>
@@ -18,7 +18,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 #include <future>
 #include "csv.h"
 
-namespace vk::binance {
+namespace stonky::binance {
 struct BinanceCommon::P {
     mutable Semaphore maxConcurrentConvertJobs;
     Semaphore maxConcurrentDownloadJobs{3};

@@ -6,13 +6,13 @@ SPDX-License-Identifier: MIT
 Copyright (c) 2026 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 */
 
-#include "vk/mexc/mexc_futures_downloader.h"
-#include "vk/mexc/mexc_futures_rest_client.h"
-#include "vk/mexc/mexc.h"
-#include "vk/downloader.h"
-#include "vk/utils/semaphore.h"
-#include "vk/utils/utils.h"
-#include "vk/interface/exchange_enums.h"
+#include "stonky/mexc/mexc_futures_downloader.h"
+#include "stonky/mexc/mexc_futures_rest_client.h"
+#include "stonky/mexc/mexc.h"
+#include "stonky/downloader.h"
+#include "stonky/utils/semaphore.h"
+#include "stonky/utils/utils.h"
+#include "stonky/interface/exchange_enums.h"
 #include <filesystem>
 #include <fstream>
 #include <spdlog/spdlog.h>
@@ -23,10 +23,10 @@ Copyright (c) 2026 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 #include <ranges>
 #include "csv.h"
 
-using namespace vk::mexc;
-using namespace vk::mexc::futures;
+using namespace stonky::mexc;
+using namespace stonky::mexc::futures;
 
-namespace vk {
+namespace stonky {
 struct MEXCFuturesDownloader::P {
     std::unique_ptr<RESTClient> mexcFuturesClient;
     mutable Semaphore maxConcurrentConvertJobs;
@@ -56,7 +56,7 @@ struct MEXCFuturesDownloader::P {
 
     static bool writeHistoricalFundingRatesToCSVFile(const std::vector<HistoricalFundingRate> &fr, const std::string &path);
 
-    static mexc::CandleInterval vkIntervalToMexcInterval(vk::CandleInterval interval);
+    static mexc::CandleInterval vkIntervalToMexcInterval(stonky::CandleInterval interval);
 
     struct CsvCandle {
         int64_t openTime{};
@@ -1074,4 +1074,4 @@ void MEXCFuturesDownloader::convertToT6(const std::string &dirPath, const Candle
         m_p->convertFromCSVToT6(allCsvFiles, T6Directory.string());
     }
 }
-} // namespace vk
+} // namespace stonky

@@ -1,28 +1,28 @@
 /**
-Binance Futures Market Data Downloader
+MEXC Futures Market Data Downloader
 
 Licensed under the MIT License <http://opensource.org/licenses/MIT>.
 SPDX-License-Identifier: MIT
-Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
+Copyright (c) 2026 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 */
 
-#ifndef INCLUDE_VK_BINANCE_FUTURES_DOWNLOADER_H
-#define INCLUDE_VK_BINANCE_FUTURES_DOWNLOADER_H
+#ifndef INCLUDE_STONKY_MEXC_FUTURES_DOWNLOADER_H
+#define INCLUDE_STONKY_MEXC_FUTURES_DOWNLOADER_H
 
-#include "vk/interface/i_exchange_downloader.h"
+#include "stonky/interface/i_exchange_downloader.h"
 #include <string>
 #include <vector>
 #include <memory>
 
-namespace vk {
-class BinanceFuturesDownloader final : public IExchangeDownloader {
+namespace stonky {
+class MEXCFuturesDownloader final : public IExchangeDownloader {
     struct P;
     std::unique_ptr<P> m_p{};
 
 public:
-    explicit BinanceFuturesDownloader(std::uint32_t maxJobs, bool deleteDelistedData = false);
+    explicit MEXCFuturesDownloader(std::uint32_t maxJobs, bool deleteDelistedData = false);
 
-    ~BinanceFuturesDownloader() override;
+    ~MEXCFuturesDownloader() override;
 
     void updateMarketData(const std::string &dirPath,
                           const std::vector<std::string> &symbols,
@@ -44,4 +44,4 @@ public:
 };
 }
 
-#endif //INCLUDE_VK_BINANCE_FUTURES_DOWNLOADER_H
+#endif //INCLUDE_STONKY_MEXC_FUTURES_DOWNLOADER_H

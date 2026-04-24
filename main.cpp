@@ -6,13 +6,13 @@ SPDX-License-Identifier: MIT
 Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 */
 
-#include "vk/binance/binance_futures_downloader.h"
-#include "vk/bybit/bybit_downloader.h"
-#include "vk/okx/okx_downloader.h"
-#include "vk/mexc/mexc_futures_downloader.h"
-#include "vk/mexc/mexc_spot_downloader.h"
-#include "vk/downloader.h"
-#include "vk/binance/binance_spot_downloader.h"
+#include "stonky/binance/binance_futures_downloader.h"
+#include "stonky/bybit/bybit_downloader.h"
+#include "stonky/okx/okx_downloader.h"
+#include "stonky/mexc/mexc_futures_downloader.h"
+#include "stonky/mexc/mexc_spot_downloader.h"
+#include "stonky/downloader.h"
+#include "stonky/binance/binance_spot_downloader.h"
 #include <spdlog/spdlog.h>
 #include <cxxopts.hpp>
 #include <filesystem>
@@ -27,7 +27,7 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 
 #define VERSION "2.2.1"
 
-using namespace vk;
+using namespace stonky;
 
 std::vector<std::string> parseSymbolsFile(const std::string &path) {
     std::vector<std::string> retVal;

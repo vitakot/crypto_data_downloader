@@ -6,15 +6,15 @@ SPDX-License-Identifier: MIT
 Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 */
 
-#ifndef INCLUDE_VK_OKX_DOWNLOADER_H
-#define INCLUDE_VK_OKX_DOWNLOADER_H
+#ifndef INCLUDE_STONKY_OKX_DOWNLOADER_H
+#define INCLUDE_STONKY_OKX_DOWNLOADER_H
 
-#include "vk/interface/i_exchange_downloader.h"
+#include "stonky/interface/i_exchange_downloader.h"
 #include <string>
 #include <vector>
 #include <memory>
 
-namespace vk {
+namespace stonky {
 class OKXDownloader final : public IExchangeDownloader {
     struct P;
     std::unique_ptr<P> m_p{};
@@ -44,4 +44,4 @@ public:
 };
 }
 
-#endif //INCLUDE_VK_OKX_DOWNLOADER_H
+#endif //INCLUDE_STONKY_OKX_DOWNLOADER_H

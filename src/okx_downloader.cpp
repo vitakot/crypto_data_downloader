@@ -6,13 +6,13 @@ SPDX-License-Identifier: MIT
 Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 */
 
-#include "vk/okx/okx_downloader.h"
-#include "vk/okx/okx.h"
-#include "vk/okx/okx_rest_client.h"
-#include "vk/okx/okx_market_data_utils.h"
-#include "vk/downloader.h"
-#include "vk/utils/utils.h"
-#include "vk/utils/semaphore.h"
+#include "stonky/okx/okx_downloader.h"
+#include "stonky/okx/okx.h"
+#include "stonky/okx/okx_rest_client.h"
+#include "stonky/okx/okx_market_data_utils.h"
+#include "stonky/downloader.h"
+#include "stonky/utils/utils.h"
+#include "stonky/utils/semaphore.h"
 #include "csv.h"
 #include <filesystem>
 #include <fstream>
@@ -21,9 +21,9 @@ Copyright (c) 2025 Vitezslav Kot <vitezslav.kot@stonky.cz>, Stonky s.r.o.
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/ranges.h>
 
-using namespace vk::okx;
+using namespace stonky::okx;
 
-namespace vk {
+namespace stonky {
 struct OKXDownloader::P {
     std::unique_ptr<RESTClient> okxClient;
     mutable Semaphore maxConcurrentConvertJobs;
