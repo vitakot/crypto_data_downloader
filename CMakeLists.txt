@@ -14,16 +14,16 @@ endif ()
 find_package(spdlog CONFIG REQUIRED)
 find_package(cxxopts CONFIG REQUIRED)
 
-add_subdirectory(binance_cpp_api)
-add_subdirectory(bybit_cpp_api)
-add_subdirectory(okx_cpp_api)
-add_subdirectory(mexc_cpp_api)
+add_subdirectory(binance-cpp-api)
+add_subdirectory(bybit-cpp-api)
+add_subdirectory(okx-cpp-api)
+add_subdirectory(mexc-cpp-api)
 
 if (NOT TARGET stonky_common)
     add_subdirectory(stonky-cpp-common)
 endif ()
 
-include_directories(include stonky-cpp-common/include binance_cpp_api/include bybit_cpp_api/include okx_cpp_api/include mexc_cpp_api/include magic_enum)
+include_directories(include stonky-cpp-common/include binance-cpp-api/include bybit-cpp-api/include okx-cpp-api/include mexc-cpp-api/include magic_enum)
 
 set(HEADERS
         include/stonky/downloader.h

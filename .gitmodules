@@ -1,15 +1,15 @@
-[submodule "binance_cpp_api"]
-	path = binance_cpp_api
+[submodule "binance-cpp-api"]
+	path = binance-cpp-api
 	url = git@github.com:StonkyLab/binance-cpp-api.git
-[submodule "bybit_cpp_api"]
-	path = bybit_cpp_api
+[submodule "bybit-cpp-api"]
+	path = bybit-cpp-api
 	url = git@github.com:StonkyLab/bybit-cpp-api.git
-[submodule "okx_cpp_api"]
-	path = okx_cpp_api
+[submodule "okx-cpp-api"]
+	path = okx-cpp-api
 	url = git@github.com:StonkyLab/okx-cpp-api.git
 [submodule "stonky-cpp-common"]
 	path = stonky-cpp-common
 	url = git@github.com:StonkyLab/stonky-cpp-common.git
-[submodule "mexc_cpp_api"]
-	path = mexc_cpp_api
+[submodule "mexc-cpp-api"]
+	path = mexc-cpp-api
 	url = git@github.com:StonkyLab/mexc-cpp-api.git
