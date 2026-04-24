@@ -1,15 +1,15 @@
 [submodule "binance_cpp_api"]
 	path = binance_cpp_api
-	url = git@github.com:vitakot/binance_cpp_api.git
+	url = git@github.com:StonkyLab/binance-cpp-api.git
 [submodule "bybit_cpp_api"]
 	path = bybit_cpp_api
-	url = git@github.com:vitakot/bybit_cpp_api.git
+	url = git@github.com:StonkyLab/bybit-cpp-api.git
 [submodule "okx_cpp_api"]
 	path = okx_cpp_api
-	url = git@github.com:vitakot/okx_cpp_api.git
+	url = git@github.com:StonkyLab/okx-cpp-api.git
 [submodule "vk_cpp_common"]
 	path = vk_cpp_common
-	url = git@github.com:vitakot/vk_cpp_common.git
+	url = git@github.com:StonkyLab/stonky-cpp-common.git
 [submodule "mexc_cpp_api"]
 	path = mexc_cpp_api
-	url = git@github.com:vitakot/mexc_cpp_api.git
+	url = git@github.com:StonkyLab/mexc-cpp-api.git
