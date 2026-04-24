@@ -19,11 +19,11 @@ add_subdirectory(bybit_cpp_api)
 add_subdirectory(okx_cpp_api)
 add_subdirectory(mexc_cpp_api)
 
-if (NOT TARGET vk_common)
-    add_subdirectory(vk_cpp_common)
+if (NOT TARGET stonky_common)
+    add_subdirectory(stonky-cpp-common)
 endif ()
 
-include_directories(include vk_cpp_common/include binance_cpp_api/include bybit_cpp_api/include okx_cpp_api/include mexc_cpp_api/include magic_enum)
+include_directories(include stonky-cpp-common/include binance_cpp_api/include bybit_cpp_api/include okx_cpp_api/include mexc_cpp_api/include magic_enum)
 
 set(HEADERS
         include/stonky/downloader.h

@@ -7,8 +7,8 @@
 [submodule "okx_cpp_api"]
 	path = okx_cpp_api
 	url = git@github.com:StonkyLab/okx-cpp-api.git
-[submodule "vk_cpp_common"]
-	path = vk_cpp_common
+[submodule "stonky-cpp-common"]
+	path = stonky-cpp-common
 	url = git@github.com:StonkyLab/stonky-cpp-common.git
 [submodule "mexc_cpp_api"]
 	path = mexc_cpp_api
