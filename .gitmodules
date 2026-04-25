@@ -13,3 +13,6 @@
 [submodule "mexc-cpp-api"]
 	path = mexc-cpp-api
 	url = git@github.com:StonkyLab/mexc-cpp-api.git
+[submodule "hyperliquid-cpp-api"]
+	path = hyperliquid-cpp-api
+	url = git@github.com:StonkyLab/hyperliquid-cpp-api.git

@@ -18,12 +18,13 @@ add_subdirectory(binance-cpp-api)
 add_subdirectory(bybit-cpp-api)
 add_subdirectory(okx-cpp-api)
 add_subdirectory(mexc-cpp-api)
+add_subdirectory(hyperliquid-cpp-api)
 
 if (NOT TARGET stonky_common)
     add_subdirectory(stonky-cpp-common)
 endif ()
 
-include_directories(include stonky-cpp-common/include binance-cpp-api/include bybit-cpp-api/include okx-cpp-api/include mexc-cpp-api/include magic_enum)
+include_directories(include stonky-cpp-common/include binance-cpp-api/include bybit-cpp-api/include okx-cpp-api/include mexc-cpp-api/include hyperliquid-cpp-api/include magic_enum)
 
 set(HEADERS
         include/stonky/downloader.h
@@ -34,6 +35,7 @@ set(HEADERS
         include/stonky/okx/okx_downloader.h
         include/stonky/mexc/mexc_futures_downloader.h
         include/stonky/mexc/mexc_spot_downloader.h
+        include/stonky/hyperliquid/hyperliquid_downloader.h
 )
 
 set(SOURCES
@@ -44,7 +46,8 @@ set(SOURCES
         src/binance_common.cpp
         src/mexc_futures_downloader.cpp
         src/mexc_spot_downloader.cpp
+        src/hyperliquid_downloader.cpp
 )
 
 add_executable(crypto_data_downloader main.cpp ${SOURCES} ${HEADERS})
-target_link_libraries(crypto_data_downloader PRIVATE spdlog::spdlog_header_only binance_api bybit_api okx_api mexc_api)
+target_link_libraries(crypto_data_downloader PRIVATE spdlog::spdlog_header_only binance_api bybit_api okx_api mexc_api hyperliquid_api)
