@@ -434,6 +434,11 @@ void HyperliquidDownloader::updateMarketData(const std::string &dirPath,
                            const auto nowTimestamp = std::chrono::seconds(std::time(nullptr)).count() * 1000;
                            const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
 
+                           constexpr int64_t oldestHyperliquidDate = 1672531200000LL;
+                           const int64_t effectiveFrom = (fromTimeStamp == oldestHyperliquidDate)
+                               ? nowTimestamp - static_cast<int64_t>(barSizeInMinutes) * 5000LL * 60000
+                               : fromTimeStamp;
+
                            spdlog::info(fmt::format("Updating candles for symbol: {}...", symbol));
 
                            auto isRateLimitError = [](const std::string &msg) {
@@ -445,11 +450,17 @@ void HyperliquidDownloader::updateMarketData(const std::string &dirPath,
                            for (int attempt = 0; attempt < maxRetries; ++attempt) {
                                try {
                                    std::ignore = m_p->hlClient->getHistoricalPrices(
-                                       symbol, hlInterval, fromTimeStamp, nowTimestamp,
+                                       symbol, hlInterval, effectiveFrom, nowTimestamp,
                                        [symbolFilePathCsv, symbol, fromTimeStamp](
                                        const std::vector<hyperliquid::Candle> &cnd) {
-                                           if (!cnd.empty()) {
-                                               if (!P::writeCandlesToCSVFile(cnd, symbolFilePathCsv.string(),
+                                           // Filter out zero-volume candles — Hyperliquid serves synthetic
+                                           // oracle prices (v=0, numTrades=0) before real trading began.
+                                           std::vector<hyperliquid::Candle> real;
+                                           for (const auto &c : cnd) {
+                                               if (c.volume > 0.0) real.push_back(c);
+                                           }
+                                           if (!real.empty()) {
+                                               if (!P::writeCandlesToCSVFile(real, symbolFilePathCsv.string(),
                                                                              fromTimeStamp)) {
                                                    spdlog::warn(
                                                        fmt::format("CSV file for symbol: {} update failed", symbol));
