@@ -28,7 +28,7 @@ struct HyperliquidDownloader::P {
     std::unique_ptr<RESTClient> hlClient;
     mutable Semaphore maxConcurrentConvertJobs;
     mutable std::recursive_mutex locker;
-    Semaphore maxConcurrentDownloadJobs{5};
+    Semaphore maxConcurrentDownloadJobs{1};
     bool deleteDelistedData = false;
 
     static bool writeCSVCandlesToZorroT6File(const std::string &csvPath, const std::string &t6Path,
