@@ -8,7 +8,7 @@ A high-performance command-line utility for downloading historical market data (
 
 ## Features
 
-- **Multi-Exchange Support**: Binance, Bybit, OKX, and MEXC
+- **Multi-Exchange Support**: Binance, Bybit, OKX, MEXC, and Hyperliquid
 - **Multiple Data Types**: OHLCV candles and funding rate history
 - **Parallel Downloads**: Configurable concurrent job processing
 - **Flexible Output**: CSV format with optional T6 (Zorro) conversion
@@ -19,14 +19,35 @@ A high-performance command-line utility for downloading historical market data (
 
 ## Supported Exchanges
 
-| Exchange | Futures | Spot | Candles | Funding Rates |
-|----------|:-------:|:----:|:-------:|:-------------:|
-| Binance  | ✅ | ✅ | ✅ | ✅ |
-| Bybit    | ✅ | ✅ | ✅ | ✅ |
-| OKX      | ✅ | ✅ | ✅ | ✅ |
-| MEXC     | ✅ | ✅ | ✅ | ✅ |
+| Exchange     | Futures | Spot | Candles | Funding Rates |
+|--------------|:-------:|:----:|:-------:|:-------------:|
+| Binance      | ✅ | ✅ | ✅ | ✅ |
+| Bybit        | ✅ | ✅ | ✅ | ✅ |
+| OKX          | ✅ | ✅ | ✅ | ✅ |
+| MEXC         | ✅ | ✅ | ✅ | ✅ |
+| Hyperliquid  | ✅ | ❌ | ✅ | ✅ |
 
 ### Exchange-Specific Notes
+
+#### Hyperliquid
+
+Hyperliquid supports **perpetual futures only** (no Spot). Symbols are coin names without a quote suffix (e.g. `BTC`, `ETH`, `SOL`), not trading pairs.
+
+**Candle history available via API:**
+
+| Interval | Available history |
+|----------|-------------------|
+| 1m       | ~3.5 days         |
+| 5m       | ~2–4 weeks        |
+| 15m      | ~5 weeks          |
+| 1h       | ~6 months         |
+| 8h+      | from March 2023   |
+
+On the first run the downloader fetches the last 5 000 candles of the requested interval. Subsequent runs append only new data since the last recorded timestamp. For intervals shorter than 8h, data before a per-interval cutoff simply does not exist in the Hyperliquid API — use an external source (e.g. 0xArchive) for a full bootstrap.
+
+**Funding rates** are available for all perpetuals back to **May 2023** (full history).
+
+> **Note:** Downloads are sequential due to Hyperliquid API rate limits.
 
 #### MEXC Historical Data Limits
 
@@ -143,7 +164,7 @@ crypto_data_downloader [OPTIONS]
 
 | Option | Long Form | Description | Default |
 |--------|-----------|-------------|---------|
-| `-e` | `--exchange` | Exchange: `bnb` (Binance), `bybit`, `okx`, `mexc` | `bnb` |
+| `-e` | `--exchange` | Exchange: `bnb` (Binance), `bybit`, `okx`, `mexc`, `hl` (Hyperliquid) | `bnb` |
 | `-t` | `--data_type` | Data type: `c` (candles), `fr` (funding rates) | `c` |
 | `-o` | `--output` | Output directory path | *required* |
 | `-s` | `--symbols` | Symbols to download (comma-separated) or `all` | `all` |
@@ -191,6 +212,21 @@ crypto_data_downloader [OPTIONS]
 **Download MEXC funding rate history:**
 ```bash
 ./crypto_data_downloader -e mexc -t fr -o /data/mexc
+```
+
+**Download Hyperliquid perpetuals — 1h candles (all symbols):**
+```bash
+./crypto_data_downloader -e hl -c f -b 60 -o /data/hyperliquid
+```
+
+**Download specific Hyperliquid symbols:**
+```bash
+./crypto_data_downloader -e hl -b 60 -s "BTC,ETH,SOL" -o /data/hyperliquid
+```
+
+**Download Hyperliquid funding rate history (all symbols, from May 2023):**
+```bash
+./crypto_data_downloader -e hl -t fr -o /data/hyperliquid
 ```
 
 **Download Binance spot data:**
@@ -243,20 +279,22 @@ The `-z` (or `--t6_conversion`) option runs a standalone conversion of existing 
 
 ```
 crypto_data_downloader/
-├── include/vk/           # Header files
-│   ├── binance/          # Binance-specific downloader
-│   ├── bybit/            # Bybit-specific downloader
-│   ├── okx/              # OKX-specific downloader
-│   ├── mexc/             # MEXC-specific downloader
-│   └── downloader.h      # Common utilities
-├── src/                  # Implementation files
-├── binance_cpp_api/      # Binance API wrapper (submodule)
-├── bybit_cpp_api/        # Bybit API wrapper (submodule)
-├── okx_cpp_api/          # OKX API wrapper (submodule)
-├── mexc_cpp_api/         # MEXC API wrapper (submodule)
-├── vk_cpp_common/        # Common utilities (submodule)
-├── CMakeLists.txt        # Build configuration
-└── main.cpp              # Entry point
+├── include/stonky/           # Header files
+│   ├── binance/              # Binance-specific downloader
+│   ├── bybit/                # Bybit-specific downloader
+│   ├── okx/                  # OKX-specific downloader
+│   ├── mexc/                 # MEXC-specific downloader
+│   ├── hyperliquid/          # Hyperliquid-specific downloader
+│   └── downloader.h          # Common utilities
+├── src/                      # Implementation files
+├── binance-cpp-api/          # Binance API wrapper (submodule)
+├── bybit-cpp-api/            # Bybit API wrapper (submodule)
+├── okx-cpp-api/              # OKX API wrapper (submodule)
+├── mexc-cpp-api/             # MEXC API wrapper (submodule)
+├── hyperliquid-cpp-api/      # Hyperliquid API wrapper (submodule)
+├── stonky-cpp-common/        # Common utilities (submodule)
+├── CMakeLists.txt            # Build configuration
+└── main.cpp                  # Entry point
 ```
 
 ## Contributing
