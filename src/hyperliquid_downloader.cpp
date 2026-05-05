@@ -432,12 +432,6 @@ void HyperliquidDownloader::updateMarketData(const std::string &dirPath,
                            symbolFilePathT6.append(symbol + ".t6");
 
                            const auto nowTimestamp = std::chrono::seconds(std::time(nullptr)).count() * 1000;
-                           const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
-
-                           constexpr int64_t oldestHyperliquidDate = 1672531200000LL;
-                           const int64_t effectiveFrom = (fromTimeStamp == oldestHyperliquidDate)
-                               ? nowTimestamp - static_cast<int64_t>(barSizeInMinutes) * 5000LL * 60000
-                               : fromTimeStamp;
 
                            spdlog::info(fmt::format("Updating candles for symbol: {}...", symbol));
 
@@ -446,8 +440,15 @@ void HyperliquidDownloader::updateMarketData(const std::string &dirPath,
                                       msg.find("429") != std::string::npos ||
                                       msg.find("rate limit") != std::string::npos;
                            };
+                           constexpr int64_t oldestHyperliquidDate = 1672531200000LL;
                            constexpr int maxRetries = 5;
                            for (int attempt = 0; attempt < maxRetries; ++attempt) {
+                               // Re-read CSV state at start of each attempt — a previous attempt
+                               // may have written batches to disk before hitting a 429.
+                               const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
+                               const int64_t effectiveFrom = (fromTimeStamp == oldestHyperliquidDate)
+                                   ? nowTimestamp - static_cast<int64_t>(barSizeInMinutes) * 5000LL * 60000
+                                   : fromTimeStamp;
                                try {
                                    std::ignore = m_p->hlClient->getHistoricalPrices(
                                        symbol, hlInterval, effectiveFrom, nowTimestamp,
@@ -658,7 +659,6 @@ void HyperliquidDownloader::updateFundingRateData(const std::string &dirPath,
                            symbolFilePathCsv.append(symbol + "_fr.csv");
 
                            const auto nowTimestamp = std::chrono::seconds(std::time(nullptr)).count() * 1000;
-                           const int64_t fromTimeStamp = P::checkFundingRatesCSVFile(symbolFilePathCsv.string());
 
                            spdlog::info(fmt::format("Updating FR for symbol: {}...", symbol));
 
@@ -669,6 +669,9 @@ void HyperliquidDownloader::updateFundingRateData(const std::string &dirPath,
                            };
                            constexpr int maxRetries = 5;
                            for (int attempt = 0; attempt < maxRetries; ++attempt) {
+                               // Re-read CSV state at start of each attempt — a previous attempt
+                               // may have written rows to disk before hitting a 429.
+                               const int64_t fromTimeStamp = P::checkFundingRatesCSVFile(symbolFilePathCsv.string());
                                try {
                                    const auto fr = m_p->hlClient->getFundingRates(symbol, fromTimeStamp + 1,
                                                                                    nowTimestamp);

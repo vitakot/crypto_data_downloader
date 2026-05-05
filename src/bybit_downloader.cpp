@@ -505,14 +505,14 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
 
                            spdlog::info(fmt::format("Updating candles for symbol: {}...", symbol));
 
-                           const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
-
-                           if (const std::string fromTimeStampStr = std::to_string(fromTimeStamp); fromTimeStampStr.
-                               length() < 13) {
-                               spdlog::warn(
-                                   fmt::format("Old data format for symbol: {}, delete file: {}...", symbol,
-                                               symbolFilePathCsv.string()));
-                               return "";
+                           {
+                               const int64_t initialFromTs = P::checkSymbolCSVFile(symbolFilePathCsv.string());
+                               if (std::to_string(initialFromTs).length() < 13) {
+                                   spdlog::warn(
+                                       fmt::format("Old data format for symbol: {}, delete file: {}...", symbol,
+                                                   symbolFilePathCsv.string()));
+                                   return "";
+                               }
                            }
 
                            auto isRateLimitError = [](const std::string &msg) {
@@ -522,6 +522,9 @@ void BybitDownloader::updateMarketData(const std::string &dirPath,
                            };
                            constexpr int maxRetries = 5;
                            for (int attempt = 0; attempt < maxRetries; ++attempt) {
+                               // Re-read CSV state at start of each attempt — a previous attempt
+                               // may have written batches to disk before hitting a 429.
+                               const int64_t fromTimeStamp = P::checkSymbolCSVFile(symbolFilePathCsv.string());
                                try {
                                    const auto candles = m_p->bybitClient->getHistoricalPrices(category,
                                        symbol,
@@ -757,8 +760,6 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
 
                            spdlog::info(fmt::format("Updating FR for symbol: {}...", symbol));
 
-                           const int64_t fromTimeStamp = P::checkFundingRatesCSVFile(symbolFilePathCsv.string());
-
                            auto isRateLimitError = [](const std::string &msg) {
                                return msg.find("10006") != std::string::npos ||
                                       msg.find("too many") != std::string::npos ||
@@ -766,6 +767,9 @@ void BybitDownloader::updateFundingRateData(const std::string &dirPath,
                            };
                            constexpr int maxRetries = 5;
                            for (int attempt = 0; attempt < maxRetries; ++attempt) {
+                               // Re-read CSV state at start of each attempt — a previous attempt
+                               // may have written rows to disk before hitting a 429.
+                               const int64_t fromTimeStamp = P::checkFundingRatesCSVFile(symbolFilePathCsv.string());
                                try {
                                    if (const auto fr = m_p->bybitClient->getFundingRates(
                                        Category::linear, symbol, fromTimeStamp + 1000, endTimestamp); !fr.empty()) {
